@@ -7,7 +7,7 @@ Turn any document or article into an MP3 you can listen to.
 ```bash
 earmark paper.pdf                     # -> ./paper.mp3
 earmark https://example.com/article   # -> ./article-title.mp3
-earmark paper.pdf --publish           # -> also lands in your podcast feed
+earmark publish paper.pdf             # -> also lands in your podcast feed
 ```
 
 `earmark` extracts the text from a document (PDF, DOCX, PPTX, EPUB, HTML,
@@ -46,6 +46,11 @@ uv tool install --python 3.12 -e .
 
 Python 3.11 or 3.12 specifically: the Kokoro toolchain does not yet support
 3.13 or newer, and `uv` will fetch a suitable interpreter for you.
+
+`uv tool install` puts `earmark` on your `PATH` in an environment of its own —
+you never activate anything to use it. `-e` makes that install track the repo,
+so a `git pull` takes effect immediately. The `.venv/` in the repo is for
+running the tests, not for running the tool.
 
 ## Caching
 
@@ -263,7 +268,7 @@ earmark feed init --publisher github \
 ### Using it
 
 ```bash
-earmark paper.pdf --publish     # convert, then add to the feed
+earmark publish paper.pdf       # convert, then add to the feed
 earmark feed url                # paste this into your podcast app
 earmark feed cover logo.png     # the artwork your podcast app shows
 earmark feed list               # what's published, and how much space it uses
@@ -319,7 +324,8 @@ alongside the feed so it survives losing your laptop.
 > **Anything you publish is readable by anyone with the URL.** These links are
 > unguessable, not private. That is fine for open-access papers, preprints and
 > public articles; think before publishing paywalled or copyrighted material.
-> Publishing is never automatic — it takes an explicit `--publish`.
+> Publishing is never automatic — it takes an explicit `publish` (or the
+> equivalent `--publish` flag on `read`).
 
 ### Subscribing on your phone
 
@@ -354,7 +360,7 @@ rather than a search term and fetches it directly.
 **4. Publish something and pull to refresh.**
 
 ```bash
-earmark paper.pdf --publish
+earmark publish paper.pdf
 ```
 
 New episodes appear on the next refresh. Artwork and show titles are cached

@@ -11,12 +11,13 @@ import sys
 
 from earmark import __version__
 
-SUBCOMMANDS = {"read", "text", "voices", "models", "cache", "feed", "config"}
+SUBCOMMANDS = {"read", "publish", "text", "voices", "models", "cache", "feed", "config"}
 
 EPILOG = """\
 examples:
   earmark paper.pdf                     -> ./paper.mp3
   earmark https://example.com/article   -> ./article-title.mp3
+  earmark publish https://.../article   make it and put it on your feed
   earmark text paper.pdf                print the cleaned speech text
 """
 
@@ -62,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"earmark {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    sub.add_parser("publish", help="make an MP3 and add it to your feed (read --publish)",
+                   add_help=False)
 
     read = sub.add_parser("read", help="make an MP3 (the default; 'read' is optional)")
     read.add_argument("source", metavar="SOURCE", help="a file path or a URL")
@@ -725,11 +729,26 @@ HANDLERS = {
 }
 
 
-def main(argv: list[str] | None = None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
+def normalize(argv: list[str]) -> list[str]:
+    """Rewrite the convenience spellings into a real subcommand line.
+
+    Both of these exist because the two things you do constantly deserve to be
+    short: making an MP3, and putting it on the feed.
+    """
+    argv = list(argv)
+    # "earmark publish SOURCE" is "earmark read SOURCE --publish". Publishing is
+    # the verb you actually want, so it gets to be a verb rather than a flag
+    # hiding at the end of the line.
+    if argv and argv[0] == "publish":
+        argv = ["read", *argv[1:], "--publish"]
     # "earmark paper.pdf" means "earmark read paper.pdf".
     if argv and argv[0] not in SUBCOMMANDS and not argv[0].startswith("-"):
         argv.insert(0, "read")
+    return argv
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = normalize(sys.argv[1:] if argv is None else argv)
 
     parser = build_parser()
     args = parser.parse_args(argv)
