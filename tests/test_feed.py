@@ -143,3 +143,60 @@ def test_local_paths_never_reach_the_feed(library, tmp_path):
     assert episode.source is None
     xml = feed_mod.build(library.state, library.publisher.url_for).decode()
     assert "/Users/me" not in xml
+
+
+def test_no_image_elements_when_no_cover_is_set(state):
+    channel = xml_of(state).find("channel")
+    assert channel.find(f"{ITUNES}image") is None
+    assert channel.find("image") is None
+
+
+def test_cover_appears_in_both_image_spellings(state):
+    state.config.image = "https://example.com/cover.jpg"
+    channel = xml_of(state).find("channel")
+    # <itunes:image> is what podcast apps read; plain <image> is what feed
+    # validators want. A cover that shows in neither is the bug being guarded.
+    assert channel.find(f"{ITUNES}image").get("href") == "https://example.com/cover.jpg"
+    assert channel.find("image/url").text == "https://example.com/cover.jpg"
+    assert channel.find("image/title").text == state.config.title
+
+
+def test_cover_is_never_an_orphan(library, tmp_path):
+    from earmark import art
+
+    library.publisher.put(_fake_mp3(tmp_path, "c.jpg"), art.COVER_NAME)
+    library.state.config.image = library.publisher.url_for(art.COVER_NAME)
+    library.publish_feed()
+    assert library.orphans() == []
+
+
+def test_set_cover_publishes_and_points_the_feed_at_it(library, tmp_path):
+    import shutil as _shutil
+
+    if _shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg is not installed")
+    from earmark import art
+
+    src = tmp_path / "logo.png"
+    __import__("subprocess").run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "lavfi", "-i", "color=c=blue:s=800x800",
+         "-frames:v", "1", "-pix_fmt", "rgba", str(src)],
+        check=True,
+    )
+    url, detail = library.set_cover(src, size=1400)
+    assert url.endswith(f"/{art.COVER_NAME}")
+    assert library.state.config.image == url
+    assert (library.publisher.folder / art.COVER_NAME).exists()
+    assert "1400x1400" in detail
+
+
+def test_a_config_image_still_wins_over_the_published_one(tmp_path):
+    """Setting `image` by hand in [feed] must not be silently overwritten."""
+    lib = Library.open({
+        "publisher": "folder",
+        "folder": str(tmp_path / "pub"),
+        "base_url": "https://example.com/em",
+        "image": "https://cdn.example.com/mine.png",
+    })
+    assert lib.state.config.image == "https://cdn.example.com/mine.png"

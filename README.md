@@ -222,8 +222,15 @@ earmark feed init \
   --title "My Reading Pile"
 ```
 
-**Dropbox / iCloud Drive / Syncthing / any synced folder** — identical, with the
-folder and the public base URL that service gives you.
+**iCloud Drive / Syncthing / an nginx docroot / any synced folder** — identical,
+with the folder and the public base URL that service gives you.
+
+**Dropbox and Google Drive do not work**, and it is worth knowing why before you
+try. Neither gives a folder a public *path*. Each file gets its own random share
+link (`.../scl/fi/<id>/<file>?rlkey=…`), and that link serves an HTML preview
+page rather than the file until you add `?dl=1`. A podcast `<enclosure>` needs a
+stable, predictable, direct URL, and there is no base URL you can hang one off.
+Use `rclone` with a real object store instead.
 
 **Cloudflare R2, Backblaze B2, S3, Google Drive, WebDAV, SFTP** — configure the
 remote once with `rclone config`, then:
@@ -258,6 +265,7 @@ earmark feed init --publisher github \
 ```bash
 earmark paper.pdf --publish     # convert, then add to the feed
 earmark feed url                # paste this into your podcast app
+earmark feed cover logo.png     # the artwork your podcast app shows
 earmark feed list               # what's published, and how much space it uses
 earmark feed doctor             # prove the URLs actually serve
 earmark feed prune --keep 40    # drop the oldest episodes
@@ -270,6 +278,33 @@ podcast app would actually be able to download them — which catches the usual
 mistake of a `base_url` that does not point at the same place your publisher
 writes to.
 
+### Cover art
+
+Without artwork your show is a grey square in a list of colourful ones. Point
+earmark at any image and it publishes a compliant one:
+
+```bash
+earmark feed cover ~/Pictures/my-logo.png
+earmark feed cover                          # print the current cover URL
+```
+
+Podcast apps are strict about this image and fail *silently* — a
+non-compliant cover shows the app's placeholder, with no error anywhere to tell
+you why. The rules are Apple's, and every major app follows them: square,
+1400×1400 minimum and 3000×3000 recommended, JPEG or PNG, RGB, **no
+transparency**, under 512 KB. A logo exported for a README typically breaks
+three of those at once — it is usually RGBA, often under 1400px, often over
+512 KB.
+
+So earmark does not ask you for a compliant file, it makes one: flatten onto a
+solid background, pad to square, scale to 3000×3000, and step the JPEG quality
+down until it fits the size budget. Your original is never touched. A
+non-square image is **padded, never cropped** — `--background` sets the colour,
+and `--size` the dimensions.
+
+`earmark feed doctor` fetches the cover along with the feed, which is the only
+way to find out the URL is wrong without waiting on a phone.
+
 `episodes.json` is the source of truth and `feed.xml` is rebuilt from it every
 time, so retitling, re-hosting and pruning are all safe. A copy is published
 alongside the feed so it survives losing your laptop.
@@ -281,14 +316,43 @@ alongside the feed so it survives losing your laptop.
 
 ### Subscribing on your phone
 
-`earmark feed url` prints the URL. Then:
+This is the part that isn't obvious, because a private feed is not in any
+podcast directory — you can't find it by searching for its name. You subscribe
+by handing the app the URL itself.
 
-| App | How |
+**1. Get the URL, on the computer:**
+
+```bash
+$ earmark feed url
+https://media.example.com/earmark/feed.xml
+```
+
+**2. Get that string onto your phone.** Text it to yourself, email it, or put it
+in a note. Then copy it.
+
+**3. Paste it into the app.** The exact place differs:
+
+| App | Where the URL goes |
 |---|---|
-| **Castbox** | Paste the URL into the **search bar** and hit search; the show comes back as a result, then tap Subscribe |
-| **Overcast** | Search → **Add URL** |
-| **Pocket Casts** | Profile → **Add RSS feed** |
-| **Apple Podcasts** | Library → Edit → *Add a Show by URL* — works, but unreliably; don't design around it |
+| **Castbox** | The **search bar** at the top — the same one you'd search a show's name in. Paste the URL, hit search, and the show comes back as the only result; tap it, then **Subscribe**. |
+| **Overcast** | **+** → **Add URL** |
+| **Pocket Casts** | **Profile** → **Add RSS feed** |
+| **AntennaPod** | **+** → **Add podcast by RSS address** |
+| **Apple Podcasts** | **Library** → **Edit** → *Add a Show by URL* — works, but unreliably; don't design around it |
+
+Castbox is the one worth spelling out, because pasting a URL into a *search
+box* looks wrong. It isn't: Castbox detects that what you pasted is a feed
+rather than a search term and fetches it directly.
+
+**4. Publish something and pull to refresh.**
+
+```bash
+earmark paper.pdf --publish
+```
+
+New episodes appear on the next refresh. Artwork and show titles are cached
+aggressively by every app, so a cover you add later can take hours to show up —
+force-refresh the show, or unsubscribe and re-subscribe, if you're impatient.
 
 The feed needs no authentication, so nothing else is required. If you ever move
 to a host behind HTTP basic auth, Castbox and Overcast both accept credentials

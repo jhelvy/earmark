@@ -93,6 +93,24 @@ the four.
 `feed.py` renders XML from `episodes.json` and never parses XML back. `feedops.py`
 combines the two. Keep those three separate.
 
+### Cover art fails silently
+
+`art.py` exists because a non-compliant `<itunes:image>` produces **no error
+anywhere** — the app shows its grey placeholder and the feed still validates.
+So earmark normalizes rather than validates: flatten alpha onto a solid colour
+(a transparent PNG renders wrong in Apple Podcasts), pad to square, scale, and
+walk the JPEG quality ladder until the file is under 512 KB. ffmpeg does all of
+it, so this costs no dependency.
+
+Non-square input is **padded, never cropped**. Cropping silently eats part of a
+logo; letterboxing is a cosmetic result the user can see and correct.
+
+`feed cover` writes the URL into `episodes.json`, not `config.toml`, because
+earmark produced the file. A hand-written `image` in `[feed]` still wins —
+`Library.open` copies config over the state on every load. Whatever writes the
+cover must also keep `COVER_NAME` out of `orphans()`, or the next
+`feed prune --orphans` deletes the artwork.
+
 `list_names()` is optional on a publisher; it is what lets `feed doctor` spot
 files the manifest no longer references. Return `None` if the backend cannot
 enumerate.

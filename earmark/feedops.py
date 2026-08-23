@@ -69,6 +69,32 @@ class Library:
         self.publisher.put(mp3, episode.name)
         return episode
 
+    def set_cover(self, image: Path, *, size: int | None = None,
+                  background: str | None = None) -> tuple[str, str]:
+        """Publish cover art and point the feed at it.
+
+        Returns ``(url, detail)``. The URL is written to the *state*, not to
+        config.toml: earmark produced the file, so earmark owns the setting. A
+        hand-written ``image`` in ``[feed]`` still wins, because :meth:`open`
+        copies config over the state on every load.
+        """
+        import tempfile
+
+        from earmark import art
+
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / art.COVER_NAME
+            art.prepare(
+                Path(image), local,
+                size=size or art.DEFAULT_SIZE,
+                background=background or art.DEFAULT_BACKGROUND,
+            )
+            detail = art.describe(local)
+            self.publisher.put(local, art.COVER_NAME)
+        url = self.publisher.url_for(art.COVER_NAME)
+        self.state.config.image = url
+        return url, detail
+
     def prune(self, keep: int | None = None, max_bytes: int | None = None) -> list[feed_mod.Episode]:
         ordered = sorted(self.state.episodes, key=lambda e: e.published, reverse=True)
         survivors: list[feed_mod.Episode] = []
@@ -125,8 +151,10 @@ class Library:
         names = lister() if lister else None
         if names is None:
             return None
+        from earmark import art
+
         known = {e.name for e in self.state.episodes}
-        known |= {feed_mod.FEED_FILE, "episodes.json"}
+        known |= {feed_mod.FEED_FILE, "episodes.json", art.COVER_NAME}
         return sorted(n for n in names if n not in known)
 
     def drop_orphans(self) -> list[str]:
@@ -137,15 +165,16 @@ class Library:
 
     def check(self) -> list[tuple[str, bool, str]]:
         """HEAD the feed and the newest episodes to prove the URLs really work."""
-        targets = [feed_mod.FEED_FILE]
         newest = sorted(self.state.episodes, key=lambda e: e.published, reverse=True)
-        targets += [e.name for e in newest[:3]]
-        results = []
-        for name in targets:
-            url = self.publisher.url_for(name)
-            ok, detail = publish_mod.check_url(url)
-            results.append((url, ok, detail))
-        return results
+        urls = [self.publisher.url_for(feed_mod.FEED_FILE)]
+        # The cover is the one asset that fails silently in a podcast app -- a
+        # broken URL shows a grey placeholder, not an error -- so check it. Use
+        # the configured URL rather than url_for(COVER_NAME): the image may be
+        # hosted somewhere else entirely.
+        if self.state.config.image:
+            urls.append(self.state.config.image)
+        urls += [self.publisher.url_for(e.name) for e in newest[:3]]
+        return [(url, *publish_mod.check_url(url)) for url in urls]
 
 
 def _is_url(value: str | None) -> bool:

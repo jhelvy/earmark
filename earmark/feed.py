@@ -133,7 +133,14 @@ def build(state: FeedState, url_for) -> bytes:
     owner = ET.SubElement(channel, f"{{{ITUNES}}}owner")
     ET.SubElement(owner, f"{{{ITUNES}}}name").text = cfg.author
     if cfg.image:
+        # Both spellings. <itunes:image> is what podcast apps read, but the
+        # plain RSS <image> is what feed validators and a few older readers
+        # look for, and it costs three lines.
         ET.SubElement(channel, f"{{{ITUNES}}}image", {"href": cfg.image})
+        image = ET.SubElement(channel, "image")
+        ET.SubElement(image, "url").text = cfg.image
+        ET.SubElement(image, "title").text = cfg.title
+        ET.SubElement(image, "link").text = cfg.link or url_for("").rstrip("/")
 
     for episode in sorted(state.episodes, key=lambda e: e.published, reverse=True):
         item = ET.SubElement(channel, "item")

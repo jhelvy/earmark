@@ -143,6 +143,13 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--command", dest="command_template", default=None,
                       help="command publisher: template using {local} and {name}")
     init.add_argument("--repo", default=None, help="github publisher: path to the local clone")
+    cover = feed_sub.add_parser("cover", help="set the show artwork your podcast app displays")
+    cover.add_argument("image", nargs="?", default=None,
+                       help="a PNG or JPEG; omit to print the current cover URL")
+    cover.add_argument("--size", type=int, default=None, metavar="PX",
+                       help="square size to produce (default: 3000)")
+    cover.add_argument("--background", default=None, metavar="COLOR",
+                       help="what to flatten transparency onto (default: white)")
     feed_sub.add_parser("list", help="show published episodes")
     feed_sub.add_parser("rebuild", help="regenerate and re-upload feed.xml")
     feed_sub.add_parser("url", help="print the feed URL to paste into your podcast app")
@@ -564,6 +571,7 @@ FEED_INIT_KEYS = {
 
 def cmd_feed(args) -> int:
     import tomllib
+    from pathlib import Path
 
     from earmark import config as config_mod
     from earmark.feedops import Library, parse_size
@@ -621,6 +629,26 @@ def cmd_feed(args) -> int:
 
     if action == "url":
         print(library.url)
+        return 0
+    if action == "cover":
+        if not args.image:
+            current = library.state.config.image
+            print(current or "no cover set; add one with: earmark feed cover IMAGE")
+            return 0 if current else 1
+        from earmark import art
+
+        source = Path(args.image).expanduser()
+        dims = art.dimensions(source)
+        if dims and dims[0] != dims[1]:
+            print(f"note: {source.name} is {dims[0]}x{dims[1]}; it will be padded to a "
+                  f"square rather than cropped")
+        url, detail = library.set_cover(
+            source, size=args.size, background=args.background
+        )
+        library.publish_feed()
+        library.save()
+        print(f"cover published ({detail})\n{url}")
+        print("Podcast apps cache artwork; it can take a while to appear.")
         return 0
     if action == "list":
         episodes = sorted(library.state.episodes, key=lambda e: e.published, reverse=True)
