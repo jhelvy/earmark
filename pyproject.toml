@@ -1,0 +1,50 @@
+[project]
+name = "earmark"
+version = "0.1.0"
+description = "Turn any document or article into an MP3 you can listen to."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "John Paul Helveston", email = "john.helveston@gmail.com" }]
+keywords = ["tts", "kokoro", "podcast", "audiobook", "markdown", "text-to-speech"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+  "kokoro-onnx>=0.6.1,<0.7",
+  "numpy>=2.0.2",
+  "trafilatura>=2.2.0",
+  "markitdown[pdf,docx,pptx]>=0.1.7",
+  "pypdf>=6.0",
+  "mutagen>=1.47",
+  "platformdirs>=4.0",
+  "rich>=13",
+]
+
+[project.optional-dependencies]
+misaki = ["misaki[en]>=0.9.4"]
+dev = ["pytest>=8", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/jhelvy/earmark"
+Issues = "https://github.com/jhelvy/earmark/issues"
+
+[project.scripts]
+earmark = "earmark.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["earmark"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = ["slow: loads the real Kokoro model (~354 MB)"]
