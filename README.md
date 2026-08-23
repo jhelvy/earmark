@@ -18,15 +18,14 @@ Everything runs on your machine. No API keys, no per-minute cost.
 
 ## Status
 
-Under construction. Milestone 1 of 8 — extraction and speech cleaning work;
-audio synthesis is not wired up yet.
+Under construction, but it makes audio. Milestone 4 of 8.
 
 | Milestone | What it adds | Done |
 |---|---|---|
 | M1 | `earmark text FILE` — extraction + cleaning | ✅ |
 | M2 | `earmark text URL` — article extraction | ✅ |
-| M3 | Kokoro synthesis, MP3 encoding | |
-| M4 | Chunking, pauses, `earmark read` | |
+| M3 | Kokoro synthesis, MP3 encoding | ✅ |
+| M4 | Chunking, pauses, `earmark read` | ✅ |
 | M5 | Chunk cache | |
 | M6 | ID3 tags | |
 | M7 | Podcast feed + pCloud publishing | |
@@ -45,6 +44,16 @@ uv tool install --python 3.12 -e .
 
 Python 3.11 or 3.12 specifically: the Kokoro toolchain does not yet support
 3.13 or newer, and `uv` will fetch a suitable interpreter for you.
+
+## Speed
+
+Measured on an M-series Mac, `af_heart`, default model: **~4.6x realtime**. The
+22-minute "Attention Is All You Need" took 4 minutes 54 seconds to narrate.
+
+The `fp16` and `int8` model variants are smaller on disk but not faster here —
+`int8` is 2.6x *slower*, because onnxruntime's CPU provider has no fast
+quantized kernels for this graph. Stick with the default unless you are short
+on disk.
 
 ## Why the text cleaning matters
 

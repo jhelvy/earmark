@@ -193,3 +193,43 @@ def test_adjacent_links_do_not_fuse():
 
 def test_editorial_markers_removed():
     assert speech("A claim [citation needed] stands.") == "A claim stands."
+
+
+def test_front_matter_cut_at_abstract():
+    md = (
+        "Attention Is All You Need\nAshish Vaswani\nGoogle Brain\n"
+        "Noam Shazeer\nGoogle Brain\nAbstract\nThe dominant models are based on X.\n"
+    )
+    out = speech(md, opts=options_for("paper"))
+    assert out.startswith("The dominant models")
+    assert "Google Brain" not in out
+
+
+def test_front_matter_kept_by_default_for_articles():
+    md = "A Blog Post\nby someone\nAbstract\nBody text here.\n"
+    assert "A Blog Post" in speech(md, opts=options_for("article"))
+
+
+def test_front_matter_anchor_must_appear_early_enough():
+    md = "Abstract\nBody.\n"
+    # Nothing meaningful precedes the anchor, so nothing is cut.
+    assert "Abstract" in speech(md, opts=options_for("paper"))
+
+
+def test_front_matter_inline_anchor():
+    # Some extractors run the whole title page into one line. The anchor has to
+    # be far enough in to look like real front matter, so pad it realistically.
+    front = (
+        "Provided proper attribution is provided, Example Corp hereby grants "
+        "permission to reproduce the tables and figures in this paper solely "
+        "for use in journalistic or scholarly works. A Very Long Paper Title "
+        "Alice Author Example Lab alice@example.com Bob Author Example Lab "
+    )
+    md = front + "Abstract The real body of the paper starts here.\n"
+    out = speech(md, opts=options_for("paper"))
+    assert out.startswith("The real body")
+
+
+def test_inline_anchor_ignored_when_it_appears_immediately():
+    md = "Abstract The body starts here right away with no front matter at all.\n"
+    assert "Abstract" in speech(md, opts=options_for("paper"))

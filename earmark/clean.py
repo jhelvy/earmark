@@ -25,7 +25,7 @@ from earmark.lexicon import (
 
 # Bump whenever a transform changes what comes out of this module. It is part
 # of the synthesis cache key, so a stale bump means stale audio.
-CLEAN_SCHEMA_VERSION = "3"
+CLEAN_SCHEMA_VERSION = "4"
 
 BlockKind = Literal["title", "heading", "para", "item"]
 
@@ -46,6 +46,7 @@ class CleanOptions:
     drop_references: bool = True
     drop_links: bool = True
     drop_sections: tuple[str, ...] = ()
+    skip_front_matter: bool = False
     replace: dict[str, str] = field(default_factory=dict)
 
 
@@ -53,7 +54,7 @@ PROFILES: dict[str, CleanOptions] = {
     # Web articles and essays: never strip author-year, since "(and it was
     # cheap, too)" looks a lot like a citation to a regex.
     "article": CleanOptions(),
-    "paper": CleanOptions(drop_author_year=True),
+    "paper": CleanOptions(drop_author_year=True, skip_front_matter=True),
     # A book's back matter may be a real chapter, so keep it.
     "book": CleanOptions(tables="describe", drop_references=False),
 }
@@ -198,6 +199,43 @@ def drop_sections(text: str, names: tuple[str, ...]) -> str:
         if cutting_at is None:
             out.append(line)
     return "\n".join(out)
+
+
+# A paper's first page is a title, an author block, affiliations and a
+# copyright notice -- none of which anybody wants narrated before the actual
+# writing starts. "Abstract" on a line of its own is a reliable boundary.
+_FRONT_MATTER_ANCHORS = (
+    re.compile(r"^\s*#{0,6}\s*abstract\s*[:.]?\s*$", re.I),
+    re.compile(r"^\s*#{0,6}\s*(?:\d+\.?\s*)?introduction\s*[:.]?\s*$", re.I),
+    re.compile(r"^\s*#{0,6}\s*summary\s*[:.]?\s*$", re.I),
+)
+_INLINE_ANCHOR = re.compile(r"\bAbstract\b[\s:.\u2014-]*(?=[A-Z])")
+FRONT_MATTER_SEARCH_LINES = 80
+FRONT_MATTER_SEARCH_CHARS = 6000
+MIN_FRONT_MATTER_LINES = 3
+
+
+def drop_front_matter(text: str) -> str:
+    """Cut a paper's title page, stopping at the abstract.
+
+    Conservative on purpose: the anchor has to appear early, and there has to
+    be something before it worth cutting, or the text is returned untouched.
+    """
+    lines = text.split("\n")
+    limit = max(FRONT_MATTER_SEARCH_LINES, len(lines) // 4)
+    for anchor in _FRONT_MATTER_ANCHORS:
+        for i, line in enumerate(lines[:limit]):
+            if anchor.match(line):
+                if i < MIN_FRONT_MATTER_LINES:
+                    return text
+                return "\n".join(lines[i + 1 :])
+
+    # Some extractors run the heading into the following sentence.
+    head = text[:FRONT_MATTER_SEARCH_CHARS]
+    m = _INLINE_ANCHOR.search(head)
+    if m and m.start() > 200:
+        return text[m.end() :]
+    return text
 
 
 def strip_definition_lines(text: str) -> str:
@@ -512,6 +550,8 @@ def clean(markdown: str, opts: CleanOptions | None = None) -> list[Block]:
     text = strip_tables(text, mode=opts.tables)
     text = strip_orphan_table_rows(text)
     text = strip_definition_lines(text)
+    if opts.skip_front_matter:
+        text = drop_front_matter(text)
 
     names = tuple(n.lower() for n in opts.drop_sections)
     if opts.drop_references:
