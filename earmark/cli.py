@@ -86,6 +86,13 @@ def build_parser() -> argparse.ArgumentParser:
                            help="report chunk count and estimated duration, synthesize nothing")
     behaviour.add_argument("--play", action="store_true", help="open the file when it is done")
     behaviour.add_argument("-q", "--quiet", action="store_true", help="no progress bar")
+    behaviour.add_argument("--no-cache", dest="use_cache", action="store_false",
+                           help="ignore and don't write the chunk cache")
+    behaviour.add_argument("--refresh", action="store_true",
+                           help="re-synthesize everything, then repopulate the cache")
+    out.add_argument("--publish", action="store_true", help="also add the episode to your feed")
+    out.add_argument("--album", default=None, help="ID3 album (default: earmark)")
+    out.add_argument("--cover", default=None, help="cover art JPEG or PNG")
 
     voices = sub.add_parser("voices", help="list available voices")
     voices.add_argument("--engine", choices=["kokoro", "say"], default="kokoro")
@@ -104,6 +111,40 @@ def build_parser() -> argparse.ArgumentParser:
     text.add_argument("--raw", action="store_true", help="print the extracted Markdown, before cleaning")
     _add_meta_args(text)
     _add_clean_args(text)
+
+    cache_p = sub.add_parser("cache", help="inspect or clear the synthesis cache")
+    cache_sub = cache_p.add_subparsers(dest="action", metavar="ACTION")
+    cache_sub.add_parser("info", help="entry count and size")
+    clear = cache_sub.add_parser("clear", help="delete cached chunks")
+    clear.add_argument("--older-than", type=float, default=None, metavar="DAYS",
+                       help="only delete entries unused for this many days")
+
+    feed_p = sub.add_parser("feed", help="manage your podcast feed")
+    feed_sub = feed_p.add_subparsers(dest="action", metavar="ACTION")
+    init = feed_sub.add_parser("init", help="write the [feed] section of your config")
+    init.add_argument("--publisher", choices=["folder", "rclone", "command", "github"],
+                      default="folder", help="how files reach the web (default: folder)")
+    init.add_argument("--base-url", required=True, help="the public URL your files appear at")
+    init.add_argument("--title", default="earmark", help="podcast title")
+    init.add_argument("--author", default=None, help="podcast author")
+    init.add_argument("--description", default=None, help="podcast description")
+    init.add_argument("--folder", default=None, help="folder publisher: the directory to copy into")
+    init.add_argument("--remote", default=None, help="rclone publisher: e.g. r2:my-bucket/earmark")
+    # dest must not be "command": that is the top-level subcommand's dest, and a
+    # nested subparser copies its whole namespace over the parent's.
+    init.add_argument("--command", dest="command_template", default=None,
+                      help="command publisher: template using {local} and {name}")
+    init.add_argument("--repo", default=None, help="github publisher: path to the local clone")
+    feed_sub.add_parser("list", help="show published episodes")
+    feed_sub.add_parser("rebuild", help="regenerate and re-upload feed.xml")
+    feed_sub.add_parser("url", help="print the feed URL to paste into your podcast app")
+    feed_sub.add_parser("doctor", help="check that the published URLs actually serve")
+    prune = feed_sub.add_parser("prune", help="remove old episodes")
+    prune.add_argument("--keep", type=int, default=None, help="keep this many newest episodes")
+    prune.add_argument("--max-size", default=None, metavar="SIZE",
+                       help="keep newest episodes under this total, e.g. 800MB")
+    prune.add_argument("--orphans", action="store_true",
+                       help="also delete published files the feed no longer lists")
 
     sub.add_parser("config", help="show the config file path")
     return parser
@@ -213,11 +254,27 @@ def cmd_read(args) -> int:
             sample_rate=int(_setting(args, cfg, "sample_rate", audio.DEFAULT_SAMPLE_RATE)),
             on_start=on_start,
             on_chunk=progress.advance,
+            use_cache=args.use_cache,
+            refresh=args.refresh,
+            album=args.album,
+            cover=Path(args.cover) if args.cover else None,
             **meta_kw,
         )
 
     size_mb = result.path.stat().st_size / 1e6
     print(f"{result.path}  ({format_duration(result.seconds)}, {size_mb:.1f} MB)")
+
+    if args.publish:
+        from earmark.feedops import Library
+
+        library = Library.open(cfg.feed)
+        episode = library.add(
+            result.path, result.meta, result.seconds, description=result.excerpt
+        )
+        url = library.publish_feed()
+        library.save()
+        print(f"published {episode.filename}")
+        print(f"feed: {url}")
     if args.play:
         import subprocess
 
@@ -233,6 +290,7 @@ class _Progress:
         self._bar = None
         self._task = None
         self._audio_seconds = 0.0
+        self._cached = 0
         self._t0 = None
 
     def start(self, chunks, meta, out_path, estimate) -> None:
@@ -265,16 +323,19 @@ class _Progress:
         self._bar.start()
         self._task = self._bar.add_task("", total=len(chunks), rtf="")
 
-    def advance(self, index: int, seconds: float) -> None:
+    def advance(self, index: int, seconds: float, cached: bool = False) -> None:
+        if cached:
+            self._cached += 1
         if self._bar is None:
             return
         import time
 
         self._audio_seconds += seconds
         elapsed = max(time.monotonic() - self._t0, 1e-6)
-        self._bar.update(
-            self._task, advance=1, rtf=f"{self._audio_seconds / elapsed:5.1f}x realtime"
-        )
+        label = f"{self._audio_seconds / elapsed:5.1f}x realtime"
+        if self._cached:
+            label += f"  ({self._cached} cached)"
+        self._bar.update(self._task, advance=1, rtf=label)
 
     def __enter__(self):
         return self
@@ -340,12 +401,155 @@ def cmd_config(args) -> int:
     return 0
 
 
+def cmd_cache(args) -> int:
+    from earmark import cache
+    from earmark.paths import cache_dir
+
+    action = getattr(args, "action", None) or "info"
+    if action == "clear":
+        removed, freed = cache.clear(args.older_than)
+        print(f"removed {removed} entries, freed {freed / 1e6:.1f} MB")
+        return 0
+    stats = cache.info()
+    print(cache_dir())
+    print(f"{stats['count']} chunks, {stats['bytes'] / 1e6:.1f} MB")
+    return 0
+
+
+# config key -> argparse dest
+FEED_INIT_KEYS = {
+    "folder": "folder",
+    "remote": "remote",
+    "command": "command_template",
+    "repo": "repo",
+}
+
+
+def cmd_feed(args) -> int:
+    import tomllib
+
+    from earmark import config as config_mod
+    from earmark.feedops import Library, parse_size
+    from earmark.paths import config_path
+
+    action = getattr(args, "action", None) or "url"
+
+    if action == "init":
+        required = {"folder": "folder", "rclone": "remote", "command": "command", "github": "repo"}
+        need = required[args.publisher]
+        if not getattr(args, FEED_INIT_KEYS[need], None):
+            raise ValueError(f"--{need} is required for the {args.publisher!r} publisher")
+        lines = [
+            "[feed]",
+            f'publisher = "{args.publisher}"',
+            f'base_url = "{args.base_url.rstrip("/")}"',
+            f'title = "{args.title}"',
+        ]
+        if args.author:
+            lines.append(f'author = "{args.author}"')
+        if args.description:
+            lines.append(f'description = "{args.description}"')
+        for key, dest in FEED_INIT_KEYS.items():
+            value = getattr(args, dest, None)
+            if value:
+                lines.append(f'{key} = "{value}"')
+        block = "\n".join(lines) + "\n"
+
+        path = config_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing = path.read_text(encoding="utf-8") if path.exists() else ""
+        if "[feed]" in existing:
+            print(f"a [feed] section already exists in {path}; edit it directly:\n\n{block}")
+            return 1
+        with path.open("a", encoding="utf-8") as fh:
+            if existing and not existing.endswith("\n"):
+                fh.write("\n")
+            fh.write("\n" + block)
+        print(f"wrote [feed] to {path}")
+        print(f"feed URL: {args.base_url.rstrip('/')}/feed.xml")
+        print("Publish something with:  earmark <source> --publish")
+        return 0
+
+    cfg = config_mod.load()
+    if not cfg.feed:
+        raise RuntimeError("no [feed] configured; run: earmark feed init --help")
+    library = Library.open(cfg.feed)
+
+    if action == "url":
+        print(library.url)
+        return 0
+    if action == "list":
+        episodes = sorted(library.state.episodes, key=lambda e: e.published, reverse=True)
+        if not episodes:
+            print("no episodes published yet")
+            return 0
+        from earmark.audio import format_duration
+
+        for e in episodes:
+            print(f"{e.published}  {format_duration(e.seconds):>8}  {e.bytes / 1e6:6.1f} MB  {e.title}")
+        total = sum(e.seconds for e in episodes)
+        print(
+            f"\n{len(episodes)} episode{'s' if len(episodes) != 1 else ''}, "
+            f"{format_duration(total)}, {library.total_bytes() / 1e6:.1f} MB"
+        )
+        return 0
+    if action == "rebuild":
+        print(library.publish_feed())
+        library.save()
+        return 0
+    if action == "prune":
+        from earmark.audio import format_duration
+
+        max_bytes = parse_size(args.max_size) if args.max_size else None
+        if args.keep is None and max_bytes is None and not args.orphans:
+            raise ValueError("give --keep, --max-size or --orphans")
+        if args.keep is not None or max_bytes is not None:
+            for e in library.prune(keep=args.keep, max_bytes=max_bytes):
+                print(f"removed {e.filename}")
+        if args.orphans:
+            for name in library.drop_orphans():
+                print(f"removed orphan {name}")
+        library.publish_feed()
+        library.save()
+        remaining = library.state.episodes
+        total = sum(e.seconds for e in remaining)
+        print(
+            f"{len(remaining)} episode{'s' if len(remaining) != 1 else ''} "
+            f"{'remain' if len(remaining) != 1 else 'remains'}, "
+            f"{format_duration(total)}, {library.total_bytes() / 1e6:.1f} MB"
+        )
+        return 0
+    if action == "doctor":
+        failures = 0
+        for url, ok, detail in library.check():
+            print(f"{'ok  ' if ok else 'FAIL'}  {url}  ({detail})")
+            failures += not ok
+        orphans = library.orphans()
+        if orphans:
+            print(f"\n{len(orphans)} published file(s) the feed no longer lists:")
+            for name in orphans[:10]:
+                print(f"  {name}")
+            print("Remove them with:  earmark feed prune --orphans")
+        elif orphans is None:
+            print("\n(this publisher cannot list what it holds, so orphans can't be checked)")
+        if failures:
+            print(
+                "\nSomething published is not reachable. Check that base_url points at the "
+                "same place your publisher writes to, and that the files are public.",
+                file=sys.stderr,
+            )
+        return 1 if failures else 0
+    raise ValueError(f"unknown feed action {action!r}")
+
+
 HANDLERS = {
     "text": cmd_text,
     "read": cmd_read,
     "config": cmd_config,
     "voices": cmd_voices,
     "models": cmd_models,
+    "cache": cmd_cache,
+    "feed": cmd_feed,
 }
 
 

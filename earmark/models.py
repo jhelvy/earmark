@@ -10,7 +10,7 @@ from __future__ import annotations
 import urllib.request
 from pathlib import Path
 
-from earmark.paths import models_dir
+from earmark import paths
 
 RELEASE = (
     "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/"
@@ -31,7 +31,7 @@ _CHUNK = 1 << 20
 
 def model_path(variant: str = "full") -> Path:
     try:
-        return models_dir() / MODELS[variant]
+        return paths.models_dir() / MODELS[variant]
     except KeyError:
         raise ValueError(
             f"unknown model {variant!r}; expected one of {', '.join(MODELS)}"
@@ -39,7 +39,7 @@ def model_path(variant: str = "full") -> Path:
 
 
 def voices_path() -> Path:
-    return models_dir() / VOICES_FILE
+    return paths.models_dir() / VOICES_FILE
 
 
 def is_downloaded(variant: str = "full") -> bool:

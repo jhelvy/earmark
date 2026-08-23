@@ -8,7 +8,7 @@ from typing import Callable, Iterator
 
 import numpy as np
 
-from earmark import audio
+from earmark import audio, cache, tag
 from earmark.chunk import Chunk, chunk_blocks, estimated_seconds
 from earmark.clean import CleanOptions, clean
 from earmark.extract import extract
@@ -22,6 +22,7 @@ class Result:
     meta: Metadata
     chunks: int
     seconds: float
+    excerpt: str = ""
 
 
 def prepare(
@@ -52,19 +53,34 @@ def synthesize(
     voice: str,
     speed: float,
     lang: str,
-    on_chunk: Callable[[int, float], None] | None = None,
+    on_chunk: Callable[[int, float, bool], None] | None = None,
+    use_cache: bool = True,
+    refresh: bool = False,
 ) -> Iterator[np.ndarray]:
     """Yield audio for each chunk in order, with its pauses attached."""
     rate = backend.sample_rate
+    fingerprint = backend.fingerprint()
     for i, chunk in enumerate(chunks):
         if chunk.pause_before:
             yield audio.silence(chunk.pause_before, rate)
-        samples = backend.synth(chunk.text, voice=voice, speed=speed, lang=lang)
+
+        samples = None
+        key = None
+        if use_cache:
+            key = cache.key(chunk.text, fingerprint, voice, speed, lang)
+            if not refresh:
+                samples = cache.get(key)
+        cached = samples is not None
+        if samples is None:
+            samples = backend.synth(chunk.text, voice=voice, speed=speed, lang=lang)
+            if key is not None:
+                cache.put(key, samples)
+
         yield samples
         if chunk.pause_after:
             yield audio.silence(chunk.pause_after, rate)
         if on_chunk:
-            on_chunk(i, len(samples) / rate)
+            on_chunk(i, len(samples) / rate, cached)
 
 
 def render(
@@ -82,24 +98,47 @@ def render(
     author: str | None = None,
     date: str | None = None,
     on_start: Callable[[list[Chunk], Metadata], None] | None = None,
-    on_chunk: Callable[[int, float], None] | None = None,
+    on_chunk: Callable[[int, float, bool], None] | None = None,
+    use_cache: bool = True,
+    refresh: bool = False,
+    album: str | None = None,
+    cover: Path | None = None,
 ) -> Result:
     chunks, meta = prepare(source, opts, title=title, author=author, date=date)
     if on_start:
         on_start(chunks, meta)
-    stream = synthesize(chunks, backend, voice, speed, lang, on_chunk)
+    stream = synthesize(
+        chunks, backend, voice, speed, lang, on_chunk,
+        use_cache=use_cache, refresh=refresh,
+    )
     written = audio.encode(
         stream, out_path, bitrate=bitrate, sample_rate=sample_rate,
         input_rate=backend.sample_rate,
     )
+    seconds = audio.duration_seconds(written, backend.sample_rate)
+    tag.write(Path(out_path), meta, duration_seconds=seconds, album=album, cover=cover)
     return Result(
         path=Path(out_path),
         meta=meta,
         chunks=len(chunks),
-        seconds=audio.duration_seconds(written, backend.sample_rate),
+        seconds=seconds,
+        excerpt=excerpt(chunks),
     )
 
 
 def dry_run(source: str, opts: CleanOptions, **kw) -> tuple[list[Chunk], Metadata, float]:
     chunks, meta = prepare(source, opts, **kw)
     return chunks, meta, estimated_seconds(chunks)
+
+
+EXCERPT_CHARS = 300
+
+
+def excerpt(chunks: list[Chunk], limit: int = EXCERPT_CHARS) -> str:
+    """A short plain-text summary for the feed, skipping the spoken title card."""
+    body = " ".join(c.text for c in chunks[1:]) if len(chunks) > 1 else ""
+    body = " ".join(body.split())
+    if len(body) <= limit:
+        return body
+    cut = body[:limit].rsplit(" ", 1)[0]
+    return cut + "\u2026"

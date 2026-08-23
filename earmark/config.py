@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from earmark.paths import config_path
+from earmark import paths
 
 DEFAULTS: dict[str, Any] = {
     "voice": "af_heart",
@@ -50,7 +50,7 @@ class Config:
 
 
 def load(path: Path | None = None) -> Config:
-    path = path or config_path()
+    path = path or paths.config_path()
     if not path.exists():
         return Config(path=path)
     with path.open("rb") as fh:

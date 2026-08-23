@@ -56,10 +56,41 @@ uv pip install -e ".[dev]"
 `-m 'not slow'` is the default; the `slow` marker is for tests that load the
 real 325 MB Kokoro model.
 
+## Publishing is deliberately host-agnostic
+
+`publish.py` knows how to put bytes somewhere and how to build a URL. It knows
+nothing about pCloud, Dropbox or GitHub specifically. Four publishers cover
+essentially everything:
+
+- `folder` — copy into a directory something else syncs to the web
+- `rclone` — shell out to rclone (S3, R2, B2, Drive, WebDAV, SFTP, ...)
+- `command` — a user-supplied command template
+- `github` — commit into a Pages repo, squashed to one commit per push
+
+**Supporting a new service should mean adding a recipe to the README, not a
+publisher here.** Only add a publisher if a service cannot be reached by any of
+the four.
+
+`feed.py` renders XML from `episodes.json` and never parses XML back. `feedops.py`
+combines the two. Keep those three separate.
+
+`list_names()` is optional on a publisher; it is what lets `feed doctor` spot
+files the manifest no longer references. Return `None` if the backend cannot
+enumerate.
+
+## Two argparse traps already hit
+
+- A subcommand's option must never use `dest="command"`: a nested subparser
+  copies its whole namespace over the parent's, nulling the subcommand. This is
+  why `feed init --command` uses `dest="command_template"`.
+- Modules must reach paths through `from earmark import paths` and call
+  `paths.cache_dir()`, not `from earmark.paths import cache_dir`. The direct
+  import binds the function at import time, which defeats the test fixture and
+  makes tests write to the real user cache.
+
 ## Milestones
 
-M1 extract + clean ✅ · M2 URLs ✅ · M3 Kokoro synthesis + MP3 · M4 chunking and
-`read` · M5 cache · M6 ID3 tags · M7 feed + pCloud publishing · M8 polish.
+M1 extract + clean ✅ · M2 URLs ✅ · M3 synthesis ✅ · M4 chunking + `read` ✅ ·
+M5 cache ✅ · M6 ID3 tags ✅ · M7 feed + publishing ✅ · M8 polish.
 
-Each milestone must be independently runnable. Do not start M4 before M3
-produces an audible file.
+Each milestone must be independently runnable.
