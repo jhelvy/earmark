@@ -24,6 +24,25 @@ keys, no per-minute cost.
   a markdownify wrapper with no boilerplate removal, so it yields nav rails and
   cookie banners.
 
+## PDF page furniture is stripped before cleaning
+
+`earmark/extract/pages.py` runs inside `_via_pypdf`, while page boundaries still
+exist — by the time `clean.py` sees the text they are just blank lines. It
+removes footnotes, page numbers, running heads and publication stamps.
+
+Every rule is **positional**, never semantic: a footnote may only start in the
+last 45% of a page and may not span more than 30 lines, so a false positive
+cannot swallow an argument mid-page. Two discriminators are load-bearing and
+easy to break:
+
+- `*Equal` is a footnote, `* item` is a bullet. **The absence of a space is the
+  only difference.**
+- `4To illustrate` is a footnote, `4 Why Self-Attention` is a heading. Same rule.
+
+An inline superscript (`gradients 4.`) is only stripped when a footnote with
+that number was actually cut from the same page, and never after a word like
+"Table" or "Figure". That is what keeps "see Table 4." intact.
+
 ## Where the quality lives
 
 `earmark/clean.py`. It is an ordered pipeline of small named `str -> str`
@@ -78,6 +97,29 @@ combines the two. Keep those three separate.
 files the manifest no longer references. Return `None` if the backend cannot
 enumerate.
 
+## Config
+
+`config.py` never raises while loading — a broken file must stay inspectable
+with `earmark config show`. Problems are collected into `warnings` (a typo'd key
+that was ignored) and `errors` (a value that cannot be used); `Config.check()`
+turns errors into a `ConfigError`, and `cli._load_config()` is the single place
+that loads, reports warnings and calls `check`.
+
+**Every key in `DEFAULTS` must be one a command actually reads.** `jobs` sat
+there for a while doing nothing, which is a lie told in a documented file;
+`test_config.py` now asserts against it. Add the key when `--jobs` lands, not
+before.
+
+Config lives in `~/.config/earmark`, not platformdirs: on macOS
+`user_config_dir` and `user_data_dir` are the *same* path, so `config.toml`
+would sit inside the directory holding a 354 MB `models/`. `EARMARK_CONFIG_DIR`
+overrides it.
+
+`feed init` must check for an existing `[feed]` by **parsing** the TOML, not by
+searching for the string `"[feed]"` — the starter config carries a commented-out
+`# [feed]` example, and a substring test treats that as already-configured
+forever.
+
 ## Two argparse traps already hit
 
 - A subcommand's option must never use `dest="command"`: a nested subparser
@@ -91,6 +133,11 @@ enumerate.
 ## Milestones
 
 M1 extract + clean ✅ · M2 URLs ✅ · M3 synthesis ✅ · M4 chunking + `read` ✅ ·
-M5 cache ✅ · M6 ID3 tags ✅ · M7 feed + publishing ✅ · M8 polish.
+M5 cache ✅ · M6 ID3 tags ✅ · M7 feed + publishing ✅ · M8 polish (config ✅,
+voice catalog ✅; `--jobs` and cache auto-pruning remaining).
+
+`tts/catalog.py` is data only — voice grades transcribed from Kokoro's
+VOICES.md. Only English voices are graded there, and grades for the rest must
+stay absent rather than invented.
 
 Each milestone must be independently runnable.

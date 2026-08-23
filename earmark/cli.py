@@ -94,8 +94,16 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("--album", default=None, help="ID3 album (default: earmark)")
     out.add_argument("--cover", default=None, help="cover art JPEG or PNG")
 
-    voices = sub.add_parser("voices", help="list available voices")
+    voices = sub.add_parser("voices", help="list available voices, or hear one")
     voices.add_argument("--engine", choices=["kokoro", "say"], default="kokoro")
+    voices.add_argument("--lang", default=None, metavar="CODE",
+                        help="only this language, by name prefix: a, b, e, f, h, i, j, p, z")
+    voices.add_argument("--all", action="store_true",
+                        help="include voices Kokoro grades D or worse")
+    voices.add_argument("--try", dest="try_voice", default=None, metavar="VOICE",
+                        help="synthesize a sample in this voice and play it")
+    voices.add_argument("--text", default=None, help="what --try should say")
+    voices.add_argument("-q", "--quiet", action="store_true", help="just the names, one per line")
 
     models_p = sub.add_parser("models", help="download / locate / remove the Kokoro model files")
     models_sub = models_p.add_subparsers(dest="action", metavar="ACTION")
@@ -146,15 +154,21 @@ def build_parser() -> argparse.ArgumentParser:
     prune.add_argument("--orphans", action="store_true",
                        help="also delete published files the feed no longer lists")
 
-    sub.add_parser("config", help="show the config file path")
+    config_p = sub.add_parser("config", help="show, create or edit your config file")
+    config_sub = config_p.add_subparsers(dest="action", metavar="ACTION")
+    config_sub.add_parser("path", help="print the config file path (the default)")
+    cfg_init = config_sub.add_parser("init", help="write a commented starter config")
+    cfg_init.add_argument("--force", action="store_true", help="overwrite an existing file")
+    config_sub.add_parser("edit", help="open the config in $EDITOR")
+    config_sub.add_parser("show", help="print the settings in effect, and any problems")
     return parser
 
 
-def _clean_options(args):
+def _clean_options(args, cfg=None):
     from earmark import config as config_mod
     from earmark.clean import options_for
 
-    cfg = config_mod.load()
+    cfg = cfg if cfg is not None else _load_config()
     profile = args.profile or cfg.get("profile")
     drop_sections = tuple(
         s.strip().lower() for s in (args.drop_sections or "").split(",") if s.strip()
@@ -177,12 +191,13 @@ def cmd_text(args) -> int:
     from earmark.clean import clean, render
     from earmark.extract import extract
 
+    cfg = _load_config()
     doc = extract(args.source, title=args.title, author=args.author, date=args.date)
     if args.raw:
         print(doc.markdown)
         return 0
 
-    blocks = clean(doc.markdown, _clean_options(args))
+    blocks = clean(doc.markdown, _clean_options(args, cfg))
     header = f"# {doc.meta.title}"
     if doc.meta.author:
         header += f"\n# by {doc.meta.author}"
@@ -195,6 +210,21 @@ def cmd_text(args) -> int:
     else:
         print(render(blocks))
     return 0
+
+
+def _load_config():
+    """Load the config, report any problems, and refuse to run on a bad value.
+
+    A setting that is silently ignored is the worst outcome: the user edits the
+    file, nothing changes, and there is nothing to read. Typos warn; values that
+    cannot be used stop the run and name themselves.
+    """
+    from earmark import config as config_mod
+
+    cfg = config_mod.load()
+    _report_config(cfg)
+    cfg.check()
+    return cfg
 
 
 def _setting(args, cfg, name, default=None):
@@ -211,8 +241,8 @@ def cmd_read(args) -> int:
     from earmark.source import default_output
     from earmark.tts import get_backend
 
-    cfg = config_mod.load()
-    opts = _clean_options(args)
+    cfg = _load_config()
+    opts = _clean_options(args, cfg)
     meta_kw = dict(title=args.title, author=args.author, date=args.date)
 
     if args.dry_run:
@@ -346,11 +376,72 @@ class _Progress:
         return False
 
 
-def cmd_voices(args) -> int:
-    from earmark.tts import get_backend
+# Kokoro's own grades run A to F+; below this the voice is a curiosity, not a
+# thing to listen to a paper in.
+POOR_GRADES = {"D+", "D", "D-", "F+", "F"}
 
-    for voice in get_backend(args.engine).voices():
-        print(voice)
+
+def cmd_voices(args) -> int:
+    from earmark.tts import catalog, get_backend
+
+    backend = get_backend(args.engine)
+    available = backend.voices()
+
+    if args.try_voice:
+        return _try_voice(backend, args.try_voice, available, args.text)
+
+    if args.lang:
+        available = [v for v in available if v.startswith(args.lang.lower()[:1])]
+        if not available:
+            raise ValueError(f"no voices for language prefix {args.lang!r}")
+
+    if args.quiet:
+        for voice in sorted(available, key=catalog.sort_key):
+            print(voice)
+        return 0
+
+    hidden = 0
+    for language, voices in catalog.group(available).items():
+        shown = [v for v in voices if args.all or catalog.grade_of(v) not in POOR_GRADES]
+        hidden += len(voices) - len(shown)
+        if not shown:
+            continue
+        print(f"\n{language}")
+        for voice in shown:
+            grade = catalog.grade_of(voice) or "-"
+            marks = " (default)" if voice == catalog.DEFAULT_VOICE else ""
+            row = f"  {voice:<16}{grade:<4}{catalog.gender_of(voice)}{marks}"
+            print(row.rstrip())
+
+    if hidden:
+        print(f"\n{hidden} more graded D or worse; --all to see them")
+    print("\nGrades are Kokoro's own. Hear one:  earmark voices --try af_bella")
+    return 0
+
+
+def _try_voice(backend, voice: str, available: list[str], text: str | None) -> int:
+    """Synthesize a few seconds in one voice and play it.
+
+    Reading the grade table tells you less than three seconds of your own text
+    does, and the model is already on disk.
+    """
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from earmark import audio
+    from earmark.tts import catalog
+
+    if voice not in available:
+        raise ValueError(f"unknown voice {voice!r}; see: earmark voices")
+    audio.require_ffmpeg()
+
+    said = text or catalog.SAMPLE_TEXT
+    out = Path(tempfile.gettempdir()) / f"earmark-sample-{voice}.mp3"
+    samples = backend.synth(said, voice=voice, speed=1.0, lang="en-us")
+    audio.encode(iter([samples]), out, input_rate=backend.sample_rate)
+    print(f"{voice}  {catalog.grade_of(voice) or '-'}  -> {out}")
+    subprocess.run(["open", str(out)], check=False)
     return 0
 
 
@@ -392,13 +483,59 @@ def cmd_models(args) -> int:
 
 
 def cmd_config(args) -> int:
+    import os
+    import subprocess
+
+    from earmark import config as config_mod
     from earmark.paths import config_path
 
+    action = getattr(args, "action", None) or "path"
     path = config_path()
+
+    if action == "init":
+        path, written = config_mod.init(path, force=args.force)
+        if not written:
+            print(f"{path} already exists; use --force to overwrite", file=sys.stderr)
+            return 1
+        print(f"wrote {path}")
+        return 0
+
+    if action == "edit":
+        if not path.exists():
+            config_mod.init(path)
+            print(f"created {path}", file=sys.stderr)
+        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "nano"
+        return subprocess.run([*editor.split(), str(path)], check=False).returncode
+
+    if action == "show":
+        cfg = config_mod.load(path)
+        if not path.exists():
+            print(f"{path} does not exist; these are the built-in defaults", file=sys.stderr)
+        for key in config_mod.DEFAULTS:
+            value = cfg.get(key)
+            source = "config" if cfg.values.get(key) != config_mod.DEFAULTS[key] else "default"
+            print(f"{key:<12} {value!r:<12} ({source})")
+        if cfg.replace:
+            print(f"\n[clean.replace] {len(cfg.replace)} replacement(s)")
+            for k, v in sorted(cfg.replace.items()):
+                print(f"  {k} -> {v}")
+        if cfg.feed:
+            print(f"\n[feed] publisher = {cfg.feed.get('publisher', 'folder')!r}")
+        _report_config(cfg)
+        for error in cfg.errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1 if cfg.errors else 0
+
     print(path)
     if not path.exists():
-        print("(does not exist yet; defaults are in use)", file=sys.stderr)
+        print("(does not exist yet; run `earmark config init`)", file=sys.stderr)
     return 0
+
+
+def _report_config(cfg) -> None:
+    """Print config warnings. Errors are left to `check`, which raises them."""
+    for warning in cfg.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
 
 
 def cmd_cache(args) -> int:
@@ -458,7 +595,14 @@ def cmd_feed(args) -> int:
         path = config_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         existing = path.read_text(encoding="utf-8") if path.exists() else ""
-        if "[feed]" in existing:
+        # Parse rather than search for "[feed]": the starter config written by
+        # `earmark config init` carries a commented-out [feed] example, and a
+        # substring test would treat that as an existing section forever.
+        try:
+            already = bool(tomllib.loads(existing).get("feed"))
+        except tomllib.TOMLDecodeError:
+            already = False
+        if already:
             print(f"a [feed] section already exists in {path}; edit it directly:\n\n{block}")
             return 1
         with path.open("a", encoding="utf-8") as fh:
@@ -470,7 +614,7 @@ def cmd_feed(args) -> int:
         print("Publish something with:  earmark <source> --publish")
         return 0
 
-    cfg = config_mod.load()
+    cfg = _load_config()
     if not cfg.feed:
         raise RuntimeError("no [feed] configured; run: earmark feed init --help")
     library = Library.open(cfg.feed)
@@ -565,9 +709,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 0
 
+    from earmark.config import ConfigError
+
     try:
         return HANDLERS[args.command](args)
-    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+    except (FileNotFoundError, RuntimeError, ValueError, ConfigError) as exc:
         print(f"earmark: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

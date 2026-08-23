@@ -110,7 +110,10 @@ def build(state: FeedState, url_for) -> bytes:
 
     ET.SubElement(channel, "title").text = cfg.title
     ET.SubElement(channel, "description").text = cfg.description
-    ET.SubElement(channel, "link").text = cfg.link or url_for(FEED_FILE)
+    # <link> is the show's page, not the feed: pointing it at feed.xml is what
+    # <atom:link rel="self"> below already does. With no site of your own, the
+    # directory the episodes live in is the closest honest answer.
+    ET.SubElement(channel, "link").text = cfg.link or url_for("").rstrip("/")
     ET.SubElement(channel, "language").text = cfg.language
     ET.SubElement(channel, "lastBuildDate").text = format_datetime(
         datetime.now(timezone.utc)

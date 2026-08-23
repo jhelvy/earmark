@@ -95,11 +95,30 @@ def _is_pdf_response(html_or_bytes) -> bool:
     return isinstance(html_or_bytes, str) and html_or_bytes.startswith("%PDF-")
 
 
+def arxiv_pdf_url(source: str) -> str | None:
+    """The PDF behind an arxiv.org/abs/... landing page.
+
+    /abs/ is the link arXiv shows and therefore the one people copy, but it is
+    a listing page: extracting it yields "View PDF", "HTML (experimental)" and
+    the arXivLabs footer instead of the paper.
+    """
+    m = _ARXIV_ID.search(source)
+    if not m or "/abs/" not in source.lower():
+        return None
+    return f"https://arxiv.org/pdf/{m.group('id')}"
+
+
 def extract_url(source: str, **overrides) -> Document:
     # arXiv links are the URL most likely to be pasted, so the PDF detour is
     # not optional.
     if _looks_like_pdf(source):
         return _from_pdf_url(source, **overrides)
+
+    pdf = arxiv_pdf_url(source)
+    if pdf is not None:
+        doc = _from_pdf_url(pdf, **overrides)
+        doc.meta.source = source
+        return doc
 
     import trafilatura
 

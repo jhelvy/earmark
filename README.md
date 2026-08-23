@@ -1,5 +1,7 @@
 # earmark
 
+<img src="docs/logo.png" align="right" width="160" alt="earmark logo" />
+
 Turn any document or article into an MP3 you can listen to.
 
 ```bash
@@ -18,7 +20,7 @@ Everything runs on your machine. No API keys, no per-minute cost.
 
 ## Status
 
-Under construction, but it makes audio. Milestone 4 of 8.
+Under construction, but it makes audio. Milestone 8 of 8, in progress.
 
 | Milestone | What it adds | Done |
 |---|---|---|
@@ -29,7 +31,7 @@ Under construction, but it makes audio. Milestone 4 of 8.
 | M5 | Chunk cache | ✅ |
 | M6 | ID3 tags | ✅ |
 | M7 | Podcast feed + publishing | ✅ |
-| M8 | Config, profiles, polish | |
+| M8 | Config, voices, profiles, polish | in progress |
 
 ## Install
 
@@ -94,10 +96,94 @@ The `paper` profile also cuts the title page, authors and affiliations, so the
 audio opens at the abstract. For arXiv URLs, earmark asks the arXiv API for the
 real title and authors, since a PDF's own metadata is usually empty.
 
+PDFs get a pass of their own first. A PDF has no idea what a paragraph is, so
+the extracted text arrives with footnotes, page numbers and running heads
+spliced into the prose — an abstract that runs straight on into "Equal
+contribution. Listing order is random", or a paragraph interrupted by the
+footnote hanging off its last line. Those are removed before anything else
+looks at the text, using position on the page rather than guesses about
+meaning: a rule that can only fire in the last 45% of a page cannot eat an
+argument in the middle of one.
+
 Profiles (`article`, `paper`, `book`) preset the rules; individual flags
 (`--keep-references`, `--tables describe`, `--say-code`, …) override them. A
 `[clean.replace]` table in `~/.config/earmark/config.toml` fixes any word the
 narrator mispronounces.
+
+## Choosing a voice
+
+Kokoro ships 54 voices. The names encode a language and a gender — `af_heart`
+is American female, `bm_george` is British male — and the quality spread is
+large, so the list is annotated with Kokoro's own grades:
+
+```bash
+earmark voices                    # graded, grouped by language
+earmark voices --lang b           # British only
+earmark voices --all              # including the ones graded D or worse
+earmark paper.pdf --voice af_bella
+```
+
+```
+American English
+  af_heart        A   female   (default)
+  af_bella        A-  female
+  af_nicole       B-  female
+  am_michael      C+  male
+  am_puck         C+  male
+
+British English
+  bf_emma         B-  female
+```
+
+Only two voices are graded A. `af_heart` is the default; `af_bella` is the
+runner-up; `am_michael` or `am_puck` are the best male voices, and `bf_emma`
+the best British one. Everything below B- is noticeably worse on a long listen.
+
+Reading a grade table tells you less than three seconds of your own text does,
+and the model is already on disk, so you can just hear it:
+
+```bash
+earmark voices --try af_bella
+earmark voices --try bf_emma --text "Whatever you like."
+```
+
+Set a favourite once in `~/.config/earmark/config.toml`:
+
+```toml
+voice = "af_bella"
+```
+
+Kokoro's [VOICES.md][voices] has the full grade table with training-data
+volumes, and the [official demo Space][kokoro-demo] lets you audition voices in
+a browser.
+
+## Configuration
+
+Defaults live in `~/.config/earmark/config.toml`. A command-line flag always
+wins over the file.
+
+```bash
+earmark config init     # write a commented starter file
+earmark config edit     # open it in $EDITOR
+earmark config show     # what is in effect, and where each value came from
+earmark config path
+```
+
+```toml
+voice = "af_heart"      # see: earmark voices
+speed = 1.1
+profile = "paper"
+output_dir = "~/Audiobooks"
+
+# Fix a mispronunciation once instead of every time.
+[clean.replace]
+BEV = "battery electric vehicle"
+```
+
+A misspelled setting warns instead of vanishing silently, and a value that
+cannot be used (`speed = 9.0`) stops the run and names itself rather than
+failing somewhere deep in the synthesizer. `earmark config show` still works on
+a file with mistakes in it, which is the point.
 
 ## Publishing to a podcast feed
 
@@ -131,7 +217,7 @@ usually means adding a recipe below, not a publisher.
 ```bash
 earmark feed init \
   --publisher folder \
-  --folder "~/pCloud Drive/Public Folder/earmark" \
+  --folder "~/pCloud Drive/public/earmark" \
   --base-url "https://filedn.com/YOUR-ID/earmark" \
   --title "My Reading Pile"
 ```
@@ -193,9 +279,26 @@ alongside the feed so it survives losing your laptop.
 > public articles; think before publishing paywalled or copyrighted material.
 > Publishing is never automatic — it takes an explicit `--publish`.
 
+### Subscribing on your phone
+
+`earmark feed url` prints the URL. Then:
+
+| App | How |
+|---|---|
+| **Castbox** | Paste the URL into the **search bar** and hit search; the show comes back as a result, then tap Subscribe |
+| **Overcast** | Search → **Add URL** |
+| **Pocket Casts** | Profile → **Add RSS feed** |
+| **Apple Podcasts** | Library → Edit → *Add a Show by URL* — works, but unreliably; don't design around it |
+
+The feed needs no authentication, so nothing else is required. If you ever move
+to a host behind HTTP basic auth, Castbox and Overcast both accept credentials
+inlined as `https://user:pass@host/path`.
+
 ## License
 
 MIT © John Paul Helveston
 
 [kokoro]: https://huggingface.co/hexgrad/Kokoro-82M
+[voices]: https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
+[kokoro-demo]: https://huggingface.co/spaces/hexgrad/Kokoro-TTS
 [uv]: https://docs.astral.sh/uv/

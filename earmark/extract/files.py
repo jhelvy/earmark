@@ -27,8 +27,10 @@ def _via_pypdf(path: Path) -> str:
     """
     from pypdf import PdfReader
 
+    from earmark.extract.pages import strip_furniture
+
     pages = [page.extract_text() or "" for page in PdfReader(str(path)).pages]
-    return "\n\n".join(p.strip() for p in pages if p.strip())
+    return "\n\n".join(strip_furniture(pages))
 
 
 def _via_library(path: Path) -> str:
