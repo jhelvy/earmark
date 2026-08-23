@@ -305,6 +305,13 @@ and `--size` the dimensions.
 `earmark feed doctor` fetches the cover along with the feed, which is the only
 way to find out the URL is wrong without waiting on a phone.
 
+Apps cache show artwork by URL and re-check it rarely, so a cover added after
+you subscribed can sit invisible for days. earmark puts a hash of the image in
+the URL (`cover.jpg?v=803e7d75`) — change the image and it becomes a new URL,
+which every app fetches at once. That gets you a fresh crawl, but Castbox in
+particular also keeps its own copy of a show's artwork server-side; if it is
+still showing a placeholder an hour later, unsubscribe and re-add the URL.
+
 `episodes.json` is the source of truth and `feed.xml` is rebuilt from it every
 time, so retitling, re-hosting and pruning are all safe. A copy is published
 alongside the feed so it survives losing your laptop.

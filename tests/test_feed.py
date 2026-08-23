@@ -185,7 +185,7 @@ def test_set_cover_publishes_and_points_the_feed_at_it(library, tmp_path):
         check=True,
     )
     url, detail = library.set_cover(src, size=1400)
-    assert url.endswith(f"/{art.COVER_NAME}")
+    assert f"/{art.COVER_NAME}?v=" in url
     assert library.state.config.image == url
     assert (library.publisher.folder / art.COVER_NAME).exists()
     assert "1400x1400" in detail
@@ -200,3 +200,29 @@ def test_a_config_image_still_wins_over_the_published_one(tmp_path):
         "image": "https://cdn.example.com/mine.png",
     })
     assert lib.state.config.image == "https://cdn.example.com/mine.png"
+
+
+def test_cover_url_is_cache_busted_by_content(library, tmp_path):
+    """Apps cache artwork by URL, so a changed cover must be a changed URL."""
+    import shutil as _shutil
+    import subprocess
+
+    if _shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg is not installed")
+
+    def image(name, colour):
+        path = tmp_path / name
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+             "-f", "lavfi", "-i", f"color=c={colour}:s=800x800",
+             "-frames:v", "1", "-pix_fmt", "rgba", str(path)],
+            check=True,
+        )
+        return path
+
+    first, _ = library.set_cover(image("a.png", "blue"), size=1400)
+    again, _ = library.set_cover(image("a2.png", "blue"), size=1400)
+    changed, _ = library.set_cover(image("b.png", "green"), size=1400)
+    assert "?v=" in first
+    assert first == again          # same bytes, same URL: no pointless refetch
+    assert changed != first

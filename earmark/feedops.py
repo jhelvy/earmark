@@ -90,8 +90,14 @@ class Library:
                 background=background or art.DEFAULT_BACKGROUND,
             )
             detail = art.describe(local)
+            # Podcast apps cache show artwork by URL and re-check it rarely --
+            # Castbox will happily keep a placeholder for days after the image
+            # appears. A content hash in the query string makes a changed cover
+            # a different URL, so it is fetched immediately, while the file on
+            # the host keeps one name and never orphans an old one.
+            stamp = hashlib.sha256(local.read_bytes()).hexdigest()[:8]
             self.publisher.put(local, art.COVER_NAME)
-        url = self.publisher.url_for(art.COVER_NAME)
+        url = f"{self.publisher.url_for(art.COVER_NAME)}?v={stamp}"
         self.state.config.image = url
         return url, detail
 
