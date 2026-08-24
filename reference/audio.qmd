@@ -1,0 +1,94 @@
+---
+title: earmark audio
+description: "Step 2: a source or a Markdown file becomes an MP3."
+---
+
+```
+earmark audio SOURCE [voice options] [audio options] [behaviour options]
+              [metadata options] [cleaning options]
+```
+
+Writes `audio/<name>.mp3` in the library, and the Markdown alongside it, so you
+can go back and fix something without re-extracting. Does not touch the feed.
+
+## Arguments
+
+| Argument | Means |
+|---|---|
+| `SOURCE` | a file path, a Markdown file, or a URL |
+
+A Markdown file carrying `earmark: cleaned` is narrated verbatim. Anything else
+goes through the cleaner first.
+
+## Voice options
+
+Shared with [`publish`](publish.qmd).
+
+| Flag | Default | Means |
+|---|---|---|
+| `-v`, `--voice VOICE` | `af_heart` | see [`earmark voices`](voices.qmd) |
+| `-s`, `--speed SPEED` | `1.0` | 0.5–2.0 |
+| `--lang LANG` | `en-us` | language code |
+| `--model {full,fp16,int8}` | `full` | Kokoro model variant |
+| `--engine {kokoro,say}` | `kokoro` | speech backend |
+
+`fp16` and `int8` are smaller and faster and sound worse. `--engine say` uses
+macOS's built-in `say` and needs no model at all — useful for checking that a
+long document chunks and encodes before committing to a real render.
+
+## Audio options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--bitrate BITRATE` | `64k` | MP3 bitrate |
+| `--sample-rate SAMPLE_RATE` | `44100` | output sample rate |
+| `--no-title-card` | off | don't speak the title and author first |
+
+## Behaviour options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--dry-run` | off | report chunk count and estimated duration, synthesize nothing |
+| `--play` | off | open the file when it is done |
+| `-q`, `--quiet` | off | no progress bar |
+| `--no-cache` | off | ignore and don't write the chunk cache |
+| `--refresh` | off | re-extract and re-synthesize, ignoring what is already in the library |
+
+`--dry-run` costs nothing and answers "how long is this going to be?" before you
+spend the compute.
+
+`--refresh` is the flag for "the extraction changed, do it all again".
+`--no-cache` is narrower: it skips the per-chunk cache for this run only.
+
+## Metadata options
+
+| Flag | Means |
+|---|---|
+| `--title TITLE` | override the detected title |
+| `--author AUTHOR` | override the detected author |
+| `--date DATE` | override the detected date (`YYYY-MM-DD`) |
+
+## Cleaning options
+
+Identical to [`earmark text`](text.qmd#cleaning-options): `--profile`,
+`--tables`, `--keep-references`, `--keep-citations`, `--keep-links`,
+`--say-code`, `--drop-sections`, `--skip-front-matter`, `--keep-front-matter`.
+They are ignored for a Markdown file that already carries `earmark: cleaned`.
+
+## Examples
+
+```bash
+earmark audio paper.pdf --dry-run
+earmark audio paper.pdf --voice af_bella --speed 1.1
+earmark audio text/some-paper.md --play
+earmark audio chapter.epub --profile book --bitrate 96k
+```
+
+## Notes
+
+The first run prompts before downloading the 354 MB Kokoro model. After every
+run the chunk cache prunes itself: entries untouched for 90 days go, then least
+recently used above 2 GB.
+
+See also: [Choosing a voice](../user-guide/voices.qmd), [Speed, caching and
+housekeeping](../user-guide/housekeeping.qmd).

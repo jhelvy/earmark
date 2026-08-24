@@ -1,0 +1,67 @@
+---
+title: Cover art
+description: Podcast apps reject artwork silently, so earmark normalizes instead of validating.
+---
+
+Put an image in the library and name it:
+
+```toml
+[feed]
+cover = "cover.jpg"
+```
+
+Every publish re-normalizes it. The original file is never modified.
+
+## Why this is a whole subsystem
+
+A non-compliant `<itunes:image>` produces **no error anywhere**. The feed still
+validates, the app shows its grey placeholder, and nothing in the chain tells
+you which of the rules you broke. Diagnosing that from a phone is miserable.
+
+So earmark does not ask you for a compliant file — it makes one. Apple's rules,
+which Castbox, Overcast, Pocket Casts and Spotify all follow:
+
+- square, 1400×1400 minimum, 3000×3000 recommended
+- JPEG or PNG, RGB — CMYK is rejected outright
+- **no transparency**; a PNG with an alpha channel renders wrong
+- under 512 KB
+
+A logo exported for a README hits none of the last three: usually RGBA, often
+under 1400px, often over 512 KB. earmark flattens the alpha onto a solid
+background, pads to square, scales, and steps the JPEG quality down until the
+file is under the size ceiling. ffmpeg does all of it, so it costs no extra
+dependency.
+
+## Padded, never cropped
+
+Non-square art is letterboxed onto a solid background. Cropping would silently
+eat part of a logo; letterboxing is a cosmetic result you can see and correct by
+supplying a square image.
+
+## `cover` versus `image`
+
+| Key | Means |
+|---|---|
+| `cover` | A **file in the library**. earmark normalizes it on every publish and serves it from your `base_url`. |
+| `image` | A **URL** to artwork hosted somewhere else. earmark passes it straight through and does nothing to it. |
+
+`image` disables the cover pipeline rather than racing it — if both are set,
+`image` wins.
+
+```toml
+[feed]
+image = "https://example.com/art/show.jpg"
+```
+
+## Changing it later
+
+```bash
+earmark feed --rebuild
+```
+
+That rewrites `feed.xml` and the cover from the current settings without
+touching any audio.
+
+Be patient afterwards: artwork and show titles are cached aggressively by every
+podcast app, so a cover you add later can take hours to appear. Force-refresh
+the show, or unsubscribe and re-subscribe, if you can't wait.

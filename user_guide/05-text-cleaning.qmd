@@ -1,0 +1,93 @@
+---
+title: Text cleaning
+description: Why the Markdown step exists, and what it changes before anything is spoken.
+---
+
+Most text-to-speech pipelines read a document exactly as written, which means
+you sit through URLs, bracketed citations, table cells, and ten minutes of
+bibliography. earmark rewrites first.
+
+| Written | Spoken |
+|---|---|
+| `Many tools, e.g. pandas, exist.` | Many tools, for example pandas, exist. |
+| `Shown in [12] and [3, 4].` | Shown in and. |
+| `Read [the paper](https://…).` | Read the paper. |
+| `Adoption hit 42%.` | Adoption hit 42 percent. |
+| `A 60 kWh pack.` | A 60 kilowatt hours pack. |
+| `## References` … | *(cut entirely)* |
+
+## See it before spending the compute
+
+```bash
+earmark text paper.pdf --profile paper --stdout | less
+earmark text paper.pdf --raw --stdout | less     # before cleaning, for comparison
+earmark audio paper.pdf --dry-run                # how long is this going to be?
+```
+
+`--dry-run` reports the chunk count and estimated duration and synthesizes
+nothing.
+
+## Profiles
+
+A profile is a preset bundle of rules. Individual flags override whatever the
+profile set.
+
+| Profile | What it changes |
+|---|---|
+| `article` (default) | Tables dropped, references cut, citations and links stripped. Author-year citations are **kept**, because `(and it was cheap, too)` looks a lot like `(Smith et al., 2020)` to a regex, and web prose is full of the former. |
+| `paper` | Everything `article` does, plus author-year citations stripped and the title page, authors and affiliations cut — so the audio opens at the abstract. |
+| `book` | Tables described rather than dropped, and the back matter kept, because a book's back matter may be a real chapter. |
+
+```bash
+earmark publish paper.pdf --profile paper
+earmark publish chapter.epub --profile book --keep-citations
+```
+
+For arXiv URLs, earmark asks the arXiv API for the real title and authors, since
+a PDF's own metadata is usually empty.
+
+## PDFs get a pass of their own first
+
+A PDF has no idea what a paragraph is, so the extracted text arrives with
+footnotes, page numbers and running heads spliced into the prose — an abstract
+that runs straight on into "Equal contribution. Listing order is random", or a
+paragraph interrupted by the footnote hanging off its last line.
+
+Those are removed **before** anything else looks at the text, while page
+boundaries still exist. By the time the general cleaner runs, the pages are just
+blank lines and the information is gone.
+
+Every rule there is **positional, never semantic**. A footnote may only start in
+the last 45% of a page and may not span more than 30 lines, so a false positive
+cannot swallow an argument mid-page. Two of the discriminators are finer than
+they look:
+
+- `*Equal` is a footnote; `* item` is a bullet. **The absence of a space is the
+  only difference.**
+- `4To illustrate` is a footnote; `4 Why Self-Attention` is a heading. Same rule.
+
+An inline superscript like `gradients 4.` is only stripped when a footnote with
+that number was actually cut from the same page, and never after a word like
+"Table" or "Figure" — which is what keeps "see Table 4." intact.
+
+## Fixing a pronunciation once
+
+If the narration mangles a term every time, teach the library rather than the
+document. In `earmark.toml`:
+
+```toml
+[replace]
+BEV = "battery electric vehicle"
+```
+
+Matched on word boundaries, longest key first. See
+[Configuration](../reference/configuration.qmd).
+
+## When cleaning is not enough
+
+Everything above is heuristics, and heuristics miss. That is exactly why
+`earmark text` exists as its own stopping point: read the Markdown, fix the one
+thing the rules got wrong, and narrate the file you fixed. Your edits are never
+re-cleaned — see [The pipeline](04-the-pipeline.qmd).
+
+Every cleaning flag is listed under [`earmark text`](../reference/text.qmd).

@@ -1,0 +1,51 @@
+---
+title: earmark init
+description: Create a library.
+---
+
+```
+earmark init [PATH] [--base-url URL] [--title TITLE] [--no-default] [--force]
+```
+
+Writes a commented `earmark.toml` into `PATH`, marking that folder as a
+library. Records it as the default library unless told not to.
+
+## Arguments
+
+| Argument | Default | Means |
+|---|---|---|
+| `PATH` | the current folder | where the library lives |
+
+## Options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--base-url URL` | none | the public URL this folder is served at |
+| `--title TITLE` | `earmark` | podcast title |
+| `--no-default` | off | don't make this the library used outside any library folder |
+| `--force` | off | overwrite an existing `earmark.toml` |
+| `--library PATH` | | the library to act on |
+
+## Notes
+
+`--base-url` is the URL the *folder* is served at, not the URL of the feed file.
+earmark appends the rest. Publishing fails without it, so it is worth setting
+now; `earmark config` can add it later.
+
+Without `--force`, `init` refuses to clobber an existing config and tells you so
+rather than silently doing nothing.
+
+`--no-default` matters when you keep more than one library — it stops a second
+`init` from stealing the default the first one set.
+
+## Examples
+
+```bash
+earmark init ~/pCloud\ Drive/public/audio \
+  --base-url https://filedn.com/XXXX/audio \
+  --title "John's Reading Pile"
+
+earmark init ~/public/fiction --base-url https://example.com/fiction --no-default
+```
+
+See also: [The library](../user-guide/the-library.qmd).

@@ -1,0 +1,102 @@
+---
+title: The pipeline
+description: text, audio, publish — one chain you can stop at any of three points.
+---
+
+Three of the seven commands are one pipeline stopped at three different points.
+**A source becomes text, text becomes audio, audio goes on your feed:**
+
+```bash
+earmark text    SOURCE   ->  text/<name>.md      look at it, fix it
+earmark audio   SOURCE   ->  audio/<name>.mp3    narrate it
+earmark publish SOURCE   ->  feed.xml            all of the above
+```
+
+Each command is a prefix of the next. `publish` runs the whole chain, so
+`earmark publish paper.pdf` is all you ever need to type. The other two exist
+for when you want to stop partway — to fix a mangled equation in the Markdown,
+or to narrate something without putting it on a feed.
+
+## The names are the folders
+
+`earmark text` fills `text/`. `earmark audio` fills `audio/`. That is the entire
+explanation of the order: nobody needs telling that text precedes audio, and
+`ls` teaches the pipeline as well as `--help` does.
+
+`publish` is a verb rather than a folder name because it is the one step that
+reaches outside the library.
+
+## Any step takes any source
+
+A file path, a URL, a Markdown file you edited, or — for `publish` — an MP3 that
+already exists. Handing `publish` an existing `.mp3`, `.m4a` or `.wav` adopts it
+onto the feed with no synthesis at all, which is how you put a recording you
+made elsewhere into the same feed.
+
+Supported documents: PDF, DOCX, PPTX, EPUB, HTML, Markdown. URLs go through
+boilerplate removal, so you get the article and not the nav rail.
+
+## Editing before you listen
+
+Extraction is good, not perfect — a mangled equation, a stray caption, a section
+you don't care about. So the Markdown is a real stopping point:
+
+```bash
+$ earmark text paper.pdf
+text/some-paper.md  (4,210 words)
+   edit it, then:  earmark publish text/some-paper.md
+```
+
+Each step names the one that follows it, so the chain is something you learn by
+using rather than by reading. That hint goes to stderr, which means
+`earmark text paper.pdf --stdout | pbcopy` stays clean.
+
+## Your edits are never undone
+
+Files earmark wrote carry `earmark: cleaned` in their front matter, and are
+narrated **exactly as they stand**. Without that marker, `audio` would re-clean
+a file you hand-edited and undo the edit using the same rules that caused it.
+
+Markdown from anywhere else — a file you wrote yourself, a document that never
+came from earmark — goes through the cleaner like any other source.
+
+`audio` and `publish` write the Markdown too, so you can always go back and fix
+something without re-extracting:
+
+```bash
+earmark publish paper.pdf          # writes text/ and audio/, publishes
+vim text/some-paper.md             # fix the equation
+earmark publish text/some-paper.md # re-narrates only what changed
+```
+
+That second publish is fast, because synthesis is cached per chunk. See
+[Speed, caching and housekeeping](10-housekeeping.qmd).
+
+## The front matter
+
+```markdown
+---
+title: Attention Is All You Need
+author: Vaswani et al.
+date: 2017-06-12
+earmark: cleaned
+---
+```
+
+It is deliberately not YAML: every line is `key: value`, split on the *first*
+colon, so a title may contain one. An unterminated `---` block is treated as
+body rather than front matter — a document that merely opens with a horizontal
+rule should not lose its first half.
+
+Override any of the detected values with `--title`, `--author`, `--date`.
+
+## The other four commands
+
+```bash
+earmark init [PATH]     create a library
+earmark config          edit its settings in $EDITOR
+earmark feed            what is published, and the feed URL
+earmark voices          list the voices, or hear one
+```
+
+Every flag of all seven is listed in the [Reference](../reference/index.qmd).

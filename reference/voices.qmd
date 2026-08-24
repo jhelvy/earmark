@@ -1,0 +1,79 @@
+---
+title: earmark voices
+description: List available voices, or hear one.
+---
+
+```
+earmark voices [--engine {kokoro,say}] [--lang CODE] [--all]
+               [--try VOICE] [--text TEXT] [-q]
+```
+
+Lists the voices grouped by language and annotated with Kokoro's own grades.
+
+```
+American English
+  af_heart        A   female   (default)
+  af_bella        A-  female
+  af_nicole       B-  female
+  am_michael      C+  male
+  am_puck         C+  male
+
+British English
+  bf_emma         B-  female
+```
+
+## Options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--engine {kokoro,say}` | `kokoro` | which backend's voices to list |
+| `--lang CODE` | all | only this language, by name prefix |
+| `--all` | off | include voices Kokoro grades D or worse |
+| `--try VOICE` | none | synthesize a sample in this voice and play it |
+| `--text TEXT` | a built-in sample | what `--try` should say |
+| `-q`, `--quiet` | off | just the names, one per line |
+| `--library PATH` | | the library to act on |
+
+## `--lang`
+
+A single-letter **name prefix**, not a language code:
+
+| Code | Language |
+|---|---|
+| `a` | American English |
+| `b` | British English |
+| `e` | Spanish |
+| `f` | French |
+| `h` | Hindi |
+| `i` | Italian |
+| `j` | Japanese |
+| `p` | Portuguese |
+| `z` | Mandarin |
+
+This is a different thing from the `--lang en-us` flag on `audio` and
+`publish`, which is a language code passed to the model.
+
+## `--all`
+
+Voices graded D or worse are hidden by default. They are bad enough that listing
+them would only waste your time; `--all` shows them anyway.
+
+## `--try`
+
+Reading a grade table tells you less than three seconds of your own text does:
+
+```bash
+earmark voices --try af_bella
+earmark voices --try bf_emma --text "Whatever you like."
+```
+
+## Examples
+
+```bash
+earmark voices
+earmark voices --lang b
+earmark voices --all
+earmark voices -q                     # names only, for scripting
+```
+
+See also: [Choosing a voice](../user-guide/voices.qmd).

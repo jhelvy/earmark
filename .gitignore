@@ -11,3 +11,8 @@ build/
 *.onnx
 *.bin
 .DS_Store
+
+# great-docs build output (ephemeral)
+great-docs/
+.great-docs-build/
+.great-docs-cache/

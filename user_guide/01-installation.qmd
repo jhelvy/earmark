@@ -1,0 +1,63 @@
+---
+title: Installation
+description: uv, ffmpeg, and the one Python version constraint that matters.
+---
+
+earmark needs three things: [uv](https://docs.astral.sh/uv/), `ffmpeg`, and a
+Python 3.11 or 3.12 interpreter that uv will fetch for you.
+
+```bash
+brew install ffmpeg
+git clone https://github.com/jhelvy/earmark.git
+cd earmark
+uv tool install --python 3.12 -e .
+```
+
+That puts `earmark` on your `PATH` in an environment of its own — you never
+activate anything to use it. The `-e` makes the install track the repo, so a
+`git pull` takes effect immediately.
+
+Check it:
+
+```bash
+earmark --version
+```
+
+## Why Python 3.11 or 3.12 specifically
+
+The Kokoro toolchain does not support 3.13 or newer, and earmark pins
+`requires-python = ">=3.11,<3.13"` to keep the optional `misaki[en]` extra
+installable. If your system Python is newer than 3.12 — and on a current macOS
+it probably is — the `--python 3.12` flag above is what makes the install work:
+uv downloads a suitable interpreter rather than using the system one.
+
+## Why ffmpeg
+
+ffmpeg encodes the MP3 and normalizes cover art. It is a runtime prerequisite,
+not a Python dependency, so it has to be installed separately. On Linux,
+`apt install ffmpeg` or the equivalent.
+
+## The model downloads itself
+
+The first time you convert something, earmark asks before pulling the 354 MB
+Kokoro model, then shows a progress bar. There is no separate download command;
+a one-time download is not a thing worth documenting as a step.
+
+The model lives with your application data, **not** in your library — you do not
+want 354 MB syncing to a public folder. The same is true of the synthesis cache
+and the one-line pointer naming your default library. Everything else earmark
+writes goes in the library.
+
+## Running the tests
+
+The `.venv/` in the repo is for running the tests, not for running the tool:
+
+```bash
+uv venv --python 3.12
+uv pip install -e ".[dev]"
+.venv/bin/python -m pytest -q
+```
+
+Tests marked `slow` load the real Kokoro model and are excluded by default.
+
+Next: [Quickstart](02-quickstart.qmd).

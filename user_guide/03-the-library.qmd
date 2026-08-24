@@ -1,0 +1,82 @@
+---
+title: The library
+description: Why a library is a folder, and how earmark finds the one you mean.
+---
+
+Everything earmark makes lives in one folder you choose — your **library**.
+
+```
+~/pCloud Drive/public/audio/     <- the library
+  earmark.toml                   its settings
+  feed.xml   episodes.json       the feed
+  cover.jpg
+  text/
+    attention-is-all-you-need.md   the words, yours to edit
+  audio/
+    attention-is-all-you-need.mp3  the narration
+```
+
+## It should be a folder on the public web
+
+Podcast apps need a URL they can fetch without logging in. earmark writes files;
+your folder does the rest. A pCloud or Dropbox public folder, an nginx docroot,
+a synced WebDAV share, a GitHub Pages repo — all fine.
+
+This is why writing the MP3 *is* publishing it, for most setups. If your folder
+is already on the web, there is nothing to upload. If it isn't, one line of
+shell closes the gap — see [Publishing anywhere](07-publishing.qmd).
+
+## `earmark.toml` lives inside it
+
+There is no `library =` setting anywhere, and there never will be, because **the
+library is the folder its config sits in**. Two things follow from that, and
+both are the point:
+
+- **A library is portable.** Move the folder, rename it, put it on another
+  machine — nothing breaks, because nothing outside it names its location.
+- **Multiple libraries are free.** They need no registry and no configuration
+  beyond making them, because `cd` is how you switch.
+
+Nothing is stored outside the library except the model download, the synthesis
+cache, and one line naming your default library.
+
+## How earmark finds the library you mean
+
+In order:
+
+1. `--library PATH`
+2. `$EARMARK_LIBRARY`
+3. an `earmark.toml` in the working directory or any parent
+4. the default recorded by `earmark init`
+
+Rule 3 is the one that makes the everyday case pleasant: `cd` into a library and
+every command acts on it, the way `git` works. Rule 4 is what makes `earmark
+publish paper.pdf` work from your Downloads folder.
+
+`--library` works on either side of the verb:
+
+```bash
+earmark --library ~/public/papers publish paper.pdf
+earmark publish paper.pdf --library ~/public/papers
+```
+
+## Several libraries
+
+Separate feeds — papers, fiction, things for the commute — need no setup beyond
+creating them:
+
+```bash
+earmark init ~/public/papers  --base-url https://example.com/papers
+earmark init ~/public/fiction --base-url https://example.com/fiction --no-default
+
+cd ~/public/fiction && earmark publish a-novel.epub   # the fiction feed
+```
+
+`--no-default` is what stops the second `init` from stealing the default the
+first one set.
+
+To see which library you are acting on, and every path in play:
+
+```bash
+earmark config --show
+```

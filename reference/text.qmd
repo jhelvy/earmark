@@ -1,0 +1,94 @@
+---
+title: earmark text
+description: "Step 1: a source becomes Markdown you can edit."
+---
+
+```
+earmark text SOURCE [--stdout] [--raw] [--force]
+             [metadata options] [cleaning options]
+```
+
+Extracts `SOURCE`, cleans it, and writes `text/<name>.md` in the library. The
+file carries `earmark: cleaned` in its front matter, which means `audio` and
+`publish` will narrate it **exactly as it stands** — your edits are never
+re-cleaned.
+
+## Arguments
+
+| Argument | Means |
+|---|---|
+| `SOURCE` | a file path or a URL |
+
+Supported documents: PDF, DOCX, PPTX, EPUB, HTML, Markdown. PDFs go through
+`pypdf` with a page-furniture pass; URLs go through `trafilatura`, so you get
+the article and not the nav rail.
+
+## Options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--stdout` | off | print it instead of writing a file |
+| `--raw` | off | the extracted Markdown, before cleaning |
+| `--force` | off | overwrite an existing Markdown file |
+| `--library PATH` | | the library to act on |
+
+`--raw` next to the default output is the fastest way to see what the cleaner
+actually did.
+
+## Metadata options
+
+Shared with [`audio`](audio.qmd) and [`publish`](publish.qmd). Each overrides
+what was detected from the document.
+
+| Flag | Means |
+|---|---|
+| `--title TITLE` | override the detected title |
+| `--author AUTHOR` | override the detected author |
+| `--date DATE` | override the detected date (`YYYY-MM-DD`) |
+
+## Cleaning options
+
+Shared with [`audio`](audio.qmd) and [`publish`](publish.qmd).
+
+| Flag | Default | Means |
+|---|---|---|
+| `--profile {article,paper,book}` | `article` | preset bundle of cleaning rules |
+| `--tables {drop,describe}` | `drop` | what to do with tables |
+| `--keep-references` | off | don't cut the References section |
+| `--keep-citations` | off | don't strip `[12]` and `(Smith et al., 2020)` |
+| `--keep-links` | off | read URLs aloud (you don't want this) |
+| `--say-code` | off | say "Code block omitted" instead of skipping silently |
+| `--drop-sections LIST` | none | comma-separated extra headings to cut |
+| `--skip-front-matter` | on in `--profile paper` | cut everything before the abstract |
+| `--keep-front-matter` | | narrate the title page, authors and affiliations |
+
+A flag always beats the profile, and the profile always beats the config file.
+
+### What each profile presets
+
+| Profile | Sets |
+|---|---|
+| `article` | the defaults; author-year citations kept |
+| `paper` | author-year citations stripped, front matter skipped |
+| `book` | `--tables describe`, references kept |
+
+## Examples
+
+```bash
+earmark text paper.pdf --profile paper
+earmark text https://example.com/article --stdout | less
+earmark text paper.pdf --raw --stdout | less
+earmark text paper.pdf --drop-sections "Acknowledgements,Appendix" --force
+```
+
+## Output
+
+```
+text/some-paper.md  (4,210 words)
+   edit it, then:  earmark publish text/some-paper.md
+```
+
+The second line goes to **stderr**, so `earmark text x.pdf --stdout | pbcopy`
+stays clean.
+
+See also: [Text cleaning](../user-guide/text-cleaning.qmd).

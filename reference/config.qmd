@@ -1,0 +1,43 @@
+---
+title: earmark config
+description: Edit or inspect a library's settings.
+---
+
+```
+earmark config [--show] [--path]
+```
+
+With no flags, opens the library's `earmark.toml` in `$EDITOR` — falling back to
+`$VISUAL`, then `nano`.
+
+## Options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--show` | off | print the settings in effect and every path |
+| `--path` | off | print the config file path |
+| `--library PATH` | | the library to act on |
+
+## `--show`
+
+Prints, in order: the library, config, `text/`, feed, episodes, models and cache
+paths; then every setting with `(config)` or `(default)` marking where the value
+came from; then the `[feed]` keys and the `[replace]` pairs.
+
+It is the fastest answer to "which library am I acting on?" and "where did the
+model actually go?".
+
+If the config has errors, `--show` still prints everything — that is the whole
+point of it — and then exits `1`.
+
+## Errors and warnings
+
+Loading a config never fails. Problems are sorted into two kinds:
+
+- **Warnings** are printed to stderr and the offending key is ignored: an
+  unknown section, an unknown setting, an unknown `feed.` key, a `[replace]`
+  that isn't a table.
+- **Errors** stop the command that was about to use the settings, with
+  `earmark: config problem in <path>:` and one line per problem.
+
+Every key is listed in [Configuration](configuration.qmd).

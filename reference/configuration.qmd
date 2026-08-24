@@ -1,0 +1,178 @@
+---
+title: Configuration
+description: Every key in earmark.toml — types, defaults, and what reads them.
+---
+
+`earmark.toml` lives inside the library and marks the folder it sits in as one.
+`earmark config` opens it in `$EDITOR`; `earmark config --show` prints every
+value in effect and where it came from.
+
+**Every setting is a default. A command-line flag always wins.**
+
+There is no `library` key and there never will be: the library is the folder
+this file sits in.
+
+## Top-level settings
+
+| Key | Type | Default | Accepts | Read by |
+|---|---|---|---|---|
+| `voice` | string | `"af_heart"` | any name from [`earmark voices`](voices.qmd) | `audio`, `publish` |
+| `speed` | number | `1.0` | `0.5`–`2.0` | `audio`, `publish` |
+| `lang` | string | `"en-us"` | a language code | `audio`, `publish` |
+| `profile` | string | `"article"` | `article`, `paper`, `book` | `text`, `audio`, `publish` |
+| `model` | string | `"full"` | `full`, `fp16`, `int8` | `audio`, `publish` |
+| `engine` | string | `"kokoro"` | `kokoro`, `say` | `audio`, `publish`, `voices` |
+| `bitrate` | string | `"64k"` | any ffmpeg bitrate | `audio`, `publish` |
+| `sample_rate` | integer | `44100` | a positive whole number | `audio`, `publish` |
+| `after_publish` | string | none | a shell command | `publish` |
+
+```toml
+voice = "af_bella"
+speed = 1.1
+profile = "paper"
+```
+
+### `after_publish`
+
+One line of shell, run inside the library once the feed is written. Only needed
+if your library is not already a folder that syncs to the web.
+
+```toml
+after_publish = "git add -A && git commit -m 'earmark' && git push"
+```
+
+It is a config key rather than a plugin system on purpose — it covers every host
+without earmark knowing the name of one. Recipes: [Publishing
+anywhere](../user-guide/publishing.qmd).
+
+## `[feed]`
+
+| Key | Type | Default | Means |
+|---|---|---|---|
+| `base_url` | string | none | the public URL the library folder is served at |
+| `title` | string | `"earmark"` | podcast title |
+| `author` | string | none | podcast author |
+| `description` | string | none | show description |
+| `link` | string | none | a website for the show |
+| `language` | string | none | RSS language code, e.g. `en-us` |
+| `category` | string | none | iTunes category |
+| `cover` | string | none | a **file in this folder**; earmark normalizes it |
+| `image` | string | none | a **URL** to artwork hosted elsewhere; passed through |
+
+```toml
+[feed]
+base_url = "https://filedn.com/XXXX/audio"
+title = "John's Reading Pile"
+author = "John Helveston"
+description = "Things I meant to read."
+cover = "cover.jpg"
+```
+
+`base_url` must start with `http://` or `https://`. Publishing without it stops
+with a message telling you to run `earmark config`.
+
+`cover` and `image` are not interchangeable — `image` disables the cover
+pipeline rather than racing it. See [Cover art](../user-guide/cover-art.qmd).
+
+## `[replace]`
+
+Fix a mispronunciation once instead of every time. Matched on word boundaries,
+longest key first.
+
+```toml
+[replace]
+BEV = "battery electric vehicle"
+NIMBY = "nimby"
+```
+
+## Keep `[feed]` last
+
+TOML puts a key you add at the bottom of a file into whichever table came before
+it. An unknown key under `[feed]` warns loudly; an extra entry under `[replace]`
+would look exactly like a word you wanted respoken, and would be silently
+accepted.
+
+So `[feed]` is the last table in the file the template writes, and it is worth
+keeping it there.
+
+## Warnings and errors
+
+Loading a config **never fails**, because a broken file must stay inspectable
+with `earmark config --show`. Problems are sorted into two kinds.
+
+**Warnings** print to stderr and the offending key is ignored:
+
+| Warning | Cause |
+|---|---|
+| `unknown section [x] ignored` | a table that is not `[feed]` or `[replace]` |
+| `unknown setting 'k' ignored` | a top-level key not in the table above |
+| `unknown setting 'feed.k' ignored` | a key not in the `[feed]` table above |
+| `[replace] must be a table of strings; ignored` | `[replace]` is not a table |
+
+**Errors** stop the command that was about to use the settings, reported as
+`earmark: config problem in <path>:` with one line per problem:
+
+| Error | Cause |
+|---|---|
+| `speed = … is not a number` | non-numeric `speed` |
+| `speed = … is not between 0.5 and 2.0` | out of range |
+| `profile = … is not one of article, paper, book` | unknown profile |
+| `model = … is not one of full, fp16, int8` | unknown model |
+| `engine = … is not one of kokoro, say` | unknown engine |
+| `voice / lang / bitrate = … is not a non-empty string` | wrong type or empty |
+| `sample_rate = … is not a positive whole number` | wrong type or `< 1` |
+| `after_publish = … is not a shell command string` | wrong type |
+| `feed.base_url is not a URL string` | wrong type |
+| `feed.base_url = … must start with http:// or https://` | wrong scheme |
+| `not valid TOML: …` | the file does not parse |
+
+## The file `init` writes
+
+```toml
+# earmark configuration
+#
+# This file marks the folder it lives in as an earmark library. Everything
+# earmark makes -- markdown in text/, MP3s, feed.xml -- lands beside it.
+#
+# Every setting here is a default; a command-line flag always wins.
+
+# voice = "af_heart"      # see: earmark voices
+# speed = 1.0             # 0.5 to 2.0
+# profile = "article"     # article | paper | book
+# lang = "en-us"
+# model = "full"          # full | fp16 | int8
+# engine = "kokoro"       # kokoro | say
+# bitrate = "64k"
+# sample_rate = 44100
+
+# Run this after every publish, from inside the library. Only needed if your
+# library is not already a folder that syncs to the web -- a git push, say.
+# after_publish = "git add -A && git commit -m 'earmark' && git push"
+
+# Fix a mispronunciation once instead of every time. Matched on word
+# boundaries, longest key first.
+[replace]
+# BEV = "battery electric vehicle"
+
+# [feed] is last on purpose. TOML puts a key you add at the bottom of the file
+# into whichever table came before it, and an unknown key here warns, while an
+# extra entry under [replace] would look like a word you wanted respoken.
+[feed]
+base_url = ""
+title = "earmark"
+# author = "Your Name"
+# description = "Things I meant to read."
+# cover = "cover.jpg"     # a file in this folder; square PNG or JPEG
+# image = "https://..."   # or artwork already hosted somewhere; this wins
+```
+
+## What is *not* in the library
+
+Three things are deliberately stored outside it, because they must not sync to a
+public folder:
+
+- the 354 MB Kokoro model
+- the per-chunk synthesis cache
+- a one-line pointer naming your default library
+
+`earmark config --show` prints where each of them actually is.

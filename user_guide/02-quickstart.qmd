@@ -1,0 +1,77 @@
+---
+title: Quickstart
+description: From an empty folder to something playing on your phone.
+---
+
+Three commands get you from nothing to a podcast feed your phone can subscribe
+to. The only decision you have to make first is *where the folder lives*.
+
+## 1. Make a library
+
+A library is a folder that is **served on the public web**. A pCloud or Dropbox
+public folder, an nginx docroot, a synced WebDAV share, a GitHub Pages repo —
+anything works, as long as a podcast app can fetch a URL from it without
+logging in.
+
+```bash
+earmark init ~/pCloud\ Drive/public/audio \
+  --base-url https://filedn.com/XXXX/audio
+```
+
+`--base-url` is the public URL that folder is served at. earmark cannot guess
+it, and publishing needs it, so it is worth getting right now rather than later.
+If you skip it, `earmark config` can set it afterwards.
+
+`init` also records this library as your default, so the commands work from
+anywhere on your machine.
+
+## 2. Publish something
+
+```bash
+earmark publish https://example.com/some-long-article
+```
+
+That one command extracts the text, rewrites it into something that sounds good
+read aloud, narrates it, writes `audio/<name>.mp3`, and adds it to `feed.xml`.
+The first run stops to ask whether it may download the model.
+
+It works on documents too — PDF, DOCX, PPTX, EPUB, HTML, Markdown:
+
+```bash
+earmark publish paper.pdf
+```
+
+## 3. Subscribe
+
+```bash
+earmark feed
+```
+
+```
+2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+
+1 episode(s), 10 MB total
+feed      https://filedn.com/XXXX/audio/feed.xml
+```
+
+That last URL is what you paste into a podcast app. Because a private feed is
+not in any directory, you cannot find it by searching for its name — you hand
+the app the URL itself. [Subscribing on your phone](09-subscribing.qmd) covers
+where the URL goes in each app.
+
+## What you just made
+
+```
+~/pCloud Drive/public/audio/     <- the library
+  earmark.toml                   its settings
+  feed.xml   episodes.json       the feed
+  cover.jpg
+  text/
+    attention-is-all-you-need.md   the words, yours to edit
+  audio/
+    attention-is-all-you-need.mp3  the narration
+```
+
+Two ideas are worth reading next, in this order: [the library is a
+folder](03-the-library.qmd), and [`publish` is the last of three
+steps](04-the-pipeline.qmd) you can stop at any of.

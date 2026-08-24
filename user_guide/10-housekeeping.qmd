@@ -1,0 +1,56 @@
+---
+title: Speed, caching and housekeeping
+description: What re-runs cost, and how to keep a library from growing forever.
+---
+
+## Speed
+
+Synthesis runs at roughly **4.6× realtime** on an M-series Mac with `af_heart`.
+
+It is also cached per chunk, keyed on the text, the voice, the speed and the
+model. Re-running a document you edited re-synthesizes only what changed: a
+22-minute paper re-renders in **8 seconds** instead of 4 minutes 54.
+
+That is what makes the edit-and-republish loop in [The
+pipeline](04-the-pipeline.qmd) practical rather than theoretical.
+
+```bash
+earmark audio paper.pdf --dry-run    # chunk count and duration, no synthesis
+earmark audio paper.pdf --no-cache   # ignore and don't write the cache
+earmark audio paper.pdf --refresh    # re-extract and re-synthesize from scratch
+```
+
+The cache trims itself after every `audio` run: entries untouched for 90 days
+go, and the least recently used go after that if it passes 2 GB. It lives with
+your application data, not in the library.
+
+`earmark config --show` prints where the cache and the model actually are.
+
+## Housekeeping
+
+```bash
+earmark feed --check                  # do the published URLs actually serve?
+earmark feed --rebuild                # rewrite feed.xml and the cover
+earmark feed --prune --keep 20        # drop all but the newest 20
+earmark feed --prune --max-size 800MB
+earmark feed --prune --orphans        # delete files the feed no longer lists
+```
+
+`--prune` needs one of `--keep` or `--max-size`; it will not guess.
+
+### `--orphans`
+
+Pruning an episode removes it from the feed. `--orphans` goes further and
+deletes library files the feed no longer lists — the leftover MP3s and Markdown
+from episodes that have already been dropped.
+
+It is the one destructive flag here, so it only runs alongside `--prune`.
+`cover.jpg` is never treated as an orphan.
+
+### Rebuilding
+
+`--rebuild` rewrites `feed.xml` and the cover from the current settings without
+re-synthesizing anything. Run it after changing a title, an author, a
+description, or the cover image.
+
+Full flag list: [`earmark feed`](../reference/feed.qmd).

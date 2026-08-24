@@ -169,6 +169,48 @@ not a thing to document. The files live in the data dir, never in the library.
 The cache prunes itself too (`cache.autoprune`, after every `audio` run): entries
 untouched for 90 days, then LRU eviction above 2 GB.
 
+## The docs are a site, not the README
+
+`README.md` is a landing page and nothing else. Everything a user reads lives
+at <https://jhelvy.github.io/earmark>, built with **great-docs**, which is a
+Python package that *generates* a Quarto project into the gitignored
+`great-docs/` directory on every build. There is no `_quarto.yml` to edit and
+committing one would be pointless — it is synthesized each time.
+
+```bash
+great-docs preview        # local server, live reload
+great-docs build          # -> great-docs/_site/
+great-docs check-links
+```
+
+- `index.qmd` (repo root) is the landing page. great-docs prefers it over
+  `README.md`, which is what keeps the README's right-aligned logo and tagline
+  out of the docs body — the hero already supplies both. Content that belongs
+  in both places has to be written in both places; keep the landing page the
+  shorter one.
+- `great-docs.yml` (repo root) is the only committed config. `great-docs config`
+  prints the full annotated template of everything it accepts.
+- `user_guide/NN-name.qmd` is the narrative, **read in order**; the `NN-`
+  prefix is the ordering mechanism and is stripped from the title and the URL.
+- `reference/*.qmd` is the lookup material: one page per command, plus
+  `configuration.qmd`.
+- Both live at the repo root because that is where great-docs looks. A section
+  under `docs/` builds, but its output keeps the whole source path while the
+  guide is canonicalized to `user-guide/`, so cross-links stop being symmetric.
+- Guide pages link each other by their prefixed filename (`04-the-pipeline.qmd`)
+  — great-docs strips the prefix. Cross-section links use the *output* names:
+  `../reference/text.qmd` and `../user-guide/voices.qmd`.
+
+**The generated Python API reference is off** (`reference: false`), and so is
+runtime introspection (`dynamic: false`). earmark is a CLI; nobody writes
+`import earmark`, and leaving it on would mean importing kokoro-onnx and numpy
+just to build prose. CI therefore never installs earmark at all.
+
+**A new flag or config key must land in `reference/` in the same commit.**
+`tests/test_docs.py` enforces exactly that: every `cli.HANDLERS` entry needs a
+page, every long option needs to appear on it, and every `DEFAULTS` /
+`FEED_KEYS` key needs to appear in `configuration.qmd`.
+
 ## Testing
 
 `tests/test_clean.py` is the bulk of the suite and the regression net for every

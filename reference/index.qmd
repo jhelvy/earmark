@@ -1,0 +1,58 @@
+---
+title: Reference
+description: Every command, every flag, every configuration key.
+---
+
+## The seven commands
+
+| Command | Does |
+|---|---|
+| [`earmark init`](init.qmd) | create a library |
+| [`earmark config`](config.qmd) | edit or inspect a library's settings |
+| [`earmark text`](text.qmd) | step 1: a source → `text/<name>.md`, yours to edit |
+| [`earmark audio`](audio.qmd) | step 2: a source or a `.md` → `audio/<name>.mp3` |
+| [`earmark publish`](publish.qmd) | step 3 — plus 1 and 2 if needed: anything → your feed |
+| [`earmark feed`](feed.qmd) | show, rebuild or trim your feed |
+| [`earmark voices`](voices.qmd) | list available voices, or hear one |
+
+Plus [`earmark.toml`](configuration.qmd) — every configuration key.
+
+## The pipeline
+
+```
+earmark text    SOURCE   ->  text/<name>.md     look at it, fix it
+earmark audio   SOURCE   ->  audio/<name>.mp3   narrate it
+earmark publish SOURCE   ->  feed.xml           all of the above
+```
+
+`publish` runs the whole chain, so `earmark publish paper.pdf` is all you need.
+The other two exist for when you want to stop partway.
+
+## Global options
+
+Available on `earmark` itself and on every subcommand.
+
+| Flag | Default | Means |
+|---|---|---|
+| `--library PATH` | the one you are in | the library to act on |
+| `--version` | | print the version and exit |
+| `-h`, `--help` | | print help and exit |
+
+`--library` works on either side of the verb:
+
+```bash
+earmark --library ~/public/papers publish paper.pdf
+earmark publish paper.pdf --library ~/public/papers
+```
+
+Without it, earmark finds the library by looking, in order, at
+`$EARMARK_LIBRARY`, an `earmark.toml` in the working directory or any parent,
+then the default recorded by `earmark init`.
+
+## Exit codes
+
+| Code | Means |
+|---|---|
+| `0` | success; also a bare `earmark`, which prints help |
+| `1` | an error, printed to stderr as `earmark: <message>` |
+| `130` | interrupted with Ctrl-C |

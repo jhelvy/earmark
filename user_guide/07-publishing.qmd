@@ -1,0 +1,68 @@
+---
+title: Publishing anywhere
+description: One config key covers every host, because publishing is a folder plus one line of shell.
+---
+
+If your library folder is already on the web, publishing is finished the moment
+the file is written. There is nothing to upload, and nothing to configure beyond
+`base_url`.
+
+If it isn't, `after_publish` is one line of shell that runs inside the library
+once the feed is written:
+
+| Host | `after_publish` |
+|---|---|
+| **GitHub Pages** | `git add -A && git commit -m earmark && git push` |
+| **S3 / R2 / B2 / Drive** | `rclone sync . r2:my-bucket/audio` |
+| **Your own server** | `rsync -a --delete . me@host:/var/www/audio/` |
+
+```toml
+after_publish = "rclone sync . r2:my-bucket/audio"
+
+[feed]
+base_url = "https://pub-xxxx.r2.dev"
+```
+
+Set `base_url` to wherever those files end up, not to where they start.
+
+## Why there is no `--publisher` flag
+
+There used to be four publishers built in: folder, rclone, command, and github.
+They are gone, because all four are the table above. A config key that runs
+your shell covers every host that exists — including the one you will use next
+year — without earmark knowing the name of any of them.
+
+So there is no plugin system to learn and no adapter to write. If a host isn't
+in that table, the answer is a different one-liner, not a feature request.
+
+## Proving it worked
+
+`base_url` being wrong is the failure that costs you the most time, because
+nothing errors: earmark writes the files, the feed validates, and the app shows
+nothing.
+
+```bash
+earmark feed --check
+```
+
+That HEADs the feed, the cover and the newest episodes and tells you which of
+them actually serve.
+
+## Episode filenames
+
+`audio` writes `audio/<slug>.mp3` and `publish` does not rename it — the two
+commands would otherwise disagree about where a document's audio lives.
+
+A content digest is still computed. It is the feed's `guid`, which is how
+re-publishing a document you edited **replaces** its episode instead of adding a
+duplicate.
+
+## Adopting audio you already have
+
+```bash
+earmark publish interview.mp3
+```
+
+An existing `.mp3`, `.m4a` or `.wav` goes onto the feed with no synthesis at
+all, which is how a recording made elsewhere ends up in the same feed as the
+things earmark narrated.

@@ -1,0 +1,64 @@
+---
+title: earmark publish
+description: "Step 3 — plus 1 and 2 if needed: anything goes on your feed."
+---
+
+```
+earmark publish SOURCE [voice options] [audio options] [behaviour options]
+                [metadata options] [cleaning options]
+```
+
+Runs the whole chain. Extracts, cleans, narrates, writes `audio/<name>.mp3`,
+adds the episode to `feed.xml`, normalizes the cover, and runs the
+`after_publish` hook from inside the library.
+
+**`earmark publish paper.pdf` is all you ever need to type.** Working from a
+bare source is the least guessable thing about the design, and the reason the
+other two commands are optional.
+
+## Arguments
+
+| Argument | Means |
+|---|---|
+| `SOURCE` | a file path, a Markdown file, an MP3, or a URL |
+
+An existing `.mp3`, `.m4a` or `.wav` is **adopted** onto the feed with no
+synthesis at all — which is how a recording made elsewhere ends up in the same
+feed as the things earmark narrated.
+
+## Options
+
+Every flag of [`earmark audio`](audio.qmd), unchanged:
+
+- **voice** — `-v/--voice`, `-s/--speed`, `--lang`, `--model`, `--engine`
+- **audio** — `--bitrate`, `--sample-rate`, `--no-title-card`
+- **behaviour** — `--dry-run`, `--play`, `-q/--quiet`, `--no-cache`, `--refresh`
+- **metadata** — `--title`, `--author`, `--date`
+- **cleaning** — `--profile`, `--tables`, `--keep-references`, `--keep-citations`,
+  `--keep-links`, `--say-code`, `--drop-sections`, `--skip-front-matter`,
+  `--keep-front-matter`
+- `--library PATH`
+
+## What it needs from the config
+
+`feed.base_url` — the public URL your library folder is served at. Without it
+publishing stops with a message telling you to run `earmark config`.
+
+If your library is not already a folder on the web, set `after_publish` to one
+line of shell. See [Publishing anywhere](../user-guide/publishing.qmd).
+
+## Re-publishing
+
+Publishing a document you have already published **replaces** its episode rather
+than duplicating it. The audio filename follows the slug, and the feed's `guid`
+is a content digest, so an edited document takes the place of its earlier self.
+
+## Examples
+
+```bash
+earmark publish paper.pdf
+earmark publish https://example.com/some-long-article
+earmark publish text/some-paper.md          # after editing the Markdown
+earmark publish interview.mp3               # adopt existing audio
+earmark publish paper.pdf --profile paper --voice af_bella
+```

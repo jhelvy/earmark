@@ -1,0 +1,70 @@
+---
+title: earmark feed
+description: Show, rebuild or trim your feed.
+---
+
+```
+earmark feed [--rebuild] [--check] [--prune] [--keep N] [--max-size SIZE] [--orphans]
+```
+
+With no flags, lists what is published: one line per episode, the total size,
+and the feed URL to paste into a podcast app.
+
+```
+2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+
+1 episode(s), 10 MB total
+feed      https://filedn.com/XXXX/audio/feed.xml
+```
+
+## Options
+
+| Flag | Default | Means |
+|---|---|---|
+| `--rebuild` | off | rewrite `feed.xml` and the cover from the current settings |
+| `--check` | off | prove the published URLs actually serve |
+| `--prune` | off | remove episodes; needs `--keep` or `--max-size` |
+| `--keep N` | none | keep this many newest |
+| `--max-size SIZE` | none | keep newest episodes under this total, e.g. `800MB` |
+| `--orphans` | off | with `--prune`, also delete library files the feed no longer lists |
+| `--library PATH` | | the library to act on |
+
+## `--rebuild`
+
+Rewrites `feed.xml` and re-normalizes the cover from the current `[feed]`
+settings. Touches no audio. Run it after changing a title, author, description,
+or cover image.
+
+## `--check`
+
+HEADs the feed, the cover and the newest episodes and reports which of them
+actually serve. This is the fastest diagnosis for "the app shows nothing", which
+is almost always a wrong `base_url` — a failure that otherwise produces no error
+anywhere.
+
+## `--prune`
+
+Needs one of `--keep` or `--max-size`; it will not guess.
+
+`--max-size` accepts a human size string such as `800MB` or `2GB`, and keeps the
+newest episodes that fit under it.
+
+::: {.callout-warning}
+## `--orphans` deletes files
+
+`--prune` alone removes episodes from the feed. Adding `--orphans` also deletes
+library files the feed no longer lists — the leftover MP3s and Markdown from
+episodes already dropped. It only runs alongside `--prune`, and `cover.jpg` is
+never treated as an orphan.
+:::
+
+## Examples
+
+```bash
+earmark feed
+earmark feed --check
+earmark feed --rebuild
+earmark feed --prune --keep 20
+earmark feed --prune --max-size 800MB
+earmark feed --prune --keep 20 --orphans
+```

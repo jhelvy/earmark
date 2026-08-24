@@ -1,0 +1,65 @@
+---
+title: Subscribing on your phone
+description: A private feed is in no directory, so you hand the app its URL.
+---
+
+This is the part that isn't obvious. A private feed is not in any podcast
+directory — you cannot find it by searching for its name. You subscribe by
+handing the app the URL itself.
+
+## 1. Get the URL, on the computer
+
+```bash
+$ earmark feed
+2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+
+1 episode(s), 10 MB total
+feed      https://filedn.com/XXXX/audio/feed.xml
+```
+
+## 2. Get that string onto your phone
+
+Text it to yourself, email it, or put it in a note. Then copy it.
+
+## 3. Paste it into the app
+
+The exact place differs:
+
+| App | Where the URL goes |
+|---|---|
+| **Castbox** | The **search bar** at the top — the same one you'd search a show's name in. Paste the URL, hit search, and the show comes back as the only result; tap it, then **Subscribe**. |
+| **Overcast** | **+** → **Add URL** |
+| **Pocket Casts** | **Profile** → **Add RSS feed** |
+| **AntennaPod** | **+** → **Add podcast by RSS address** |
+| **Apple Podcasts** | **Library** → **Edit** → *Add a Show by URL* — works, but unreliably; don't design around it |
+
+Castbox is the one worth spelling out, because pasting a URL into a *search box*
+looks wrong. It isn't: Castbox detects that what you pasted is a feed rather
+than a search term and fetches it directly.
+
+## 4. Publish something and pull to refresh
+
+```bash
+earmark publish paper.pdf
+```
+
+New episodes appear on the next refresh.
+
+## If nothing shows up
+
+Almost always the feed URL doesn't actually serve. Check from the computer
+first, before blaming the app:
+
+```bash
+earmark feed --check
+```
+
+Artwork and show titles are a separate matter — every app caches them
+aggressively, so a cover you add later can take hours to appear even when
+episodes are arriving fine.
+
+## Authentication
+
+The feed needs none, so nothing else is required. If you ever move to a host
+behind HTTP basic auth, Castbox and Overcast both accept credentials inlined as
+`https://user:pass@host/path`.

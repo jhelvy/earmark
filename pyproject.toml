@@ -32,6 +32,7 @@ dev = ["pytest>=8", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/jhelvy/earmark"
+Documentation = "https://jhelvy.github.io/earmark"
 Issues = "https://github.com/jhelvy/earmark/issues"
 
 [project.scripts]
