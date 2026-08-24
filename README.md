@@ -2,36 +2,47 @@
 
 <img src="docs/logo.png" align="right" width="160" alt="earmark logo" />
 
-Turn any document or article into an MP3 you can listen to.
+Turn the things you meant to read into a private podcast feed.
 
 ```bash
-earmark paper.pdf                     # -> ./paper.mp3
-earmark https://example.com/article   # -> ./article-title.mp3
-earmark publish paper.pdf             # -> also lands in your podcast feed
+earmark init ~/pCloud/public/audio --base-url https://filedn.com/XXXX/audio
+earmark publish paper.pdf
 ```
 
 `earmark` extracts the text from a document (PDF, DOCX, PPTX, EPUB, HTML,
 Markdown) or an article URL, rewrites it into something that sounds good read
-aloud, narrates it locally with [Kokoro-82M][kokoro], and writes a tagged MP3.
-Optionally it publishes to a private podcast feed so the things you meant to
-read show up on your phone.
+aloud, narrates it locally with [Kokoro-82M][kokoro], and puts the MP3 on a
+podcast feed your phone can subscribe to.
 
 Everything runs on your machine. No API keys, no per-minute cost.
 
-## Status
+## The library
 
-Under construction, but it makes audio. Milestone 8 of 8, in progress.
+Everything earmark makes lives in one folder you choose — your **library**.
 
-| Milestone | What it adds | Done |
-|---|---|---|
-| M1 | `earmark text FILE` — extraction + cleaning | ✅ |
-| M2 | `earmark text URL` — article extraction | ✅ |
-| M3 | Kokoro synthesis, MP3 encoding | ✅ |
-| M4 | Chunking, pauses, `earmark read` | ✅ |
-| M5 | Chunk cache | ✅ |
-| M6 | ID3 tags | ✅ |
-| M7 | Podcast feed + publishing | ✅ |
-| M8 | Config, voices, profiles, polish | in progress |
+```
+~/pCloud Drive/public/audio/     <- the library
+  earmark.toml                   its settings
+  feed.xml   episodes.json       the feed
+  cover.jpg
+  text/
+    attention-is-all-you-need.md   the words, yours to edit
+  audio/
+    attention-is-all-you-need.mp3  the narration
+```
+
+Two things to know about it:
+
+1. **It should be a folder that is served on the public web.** Anything works:
+   a pCloud or Dropbox public folder, an nginx docroot, a synced WebDAV share,
+   a GitHub Pages repo. Podcast apps need a URL they can fetch without logging
+   in; earmark writes files, and your folder does the rest.
+2. **`earmark.toml` lives inside it**, so a library is self-contained. There is
+   no `library =` setting anywhere, because the library is the folder its config
+   sits in. Move the folder and nothing breaks.
+
+Nothing else is stored outside the library except the model download, the
+synthesis cache, and one line naming your default library.
 
 ## Install
 
@@ -52,28 +63,161 @@ you never activate anything to use it. `-e` makes that install track the repo,
 so a `git pull` takes effect immediately. The `.venv/` in the repo is for
 running the tests, not for running the tool.
 
-## Caching
+## The seven commands
 
-Synthesis is cached per chunk, keyed on the text, the voice, the speed and the
-model. Re-running a document you have edited re-synthesizes only what changed:
-the 22-minute paper above re-renders in **8 seconds** instead of 4 minutes 54.
+Three of them are one pipeline stopped at three different points. **A source
+becomes text, text becomes audio, audio goes on your feed:**
 
 ```bash
-earmark cache info
-earmark cache clear --older-than 30
+earmark text    SOURCE   ->  text/<name>.md      look at it, fix it
+earmark audio   SOURCE   ->  audio/<name>.mp3    narrate it
+earmark publish SOURCE   ->  feed.xml            all of the above
 ```
 
-Cached audio costs about 2.9 MB per minute.
+`publish` runs the whole chain, so `earmark publish paper.pdf` is all you ever
+need to type. The other two exist for when you want to stop partway.
 
-## Speed
+The names are the folders. `earmark text` fills `text/`, `earmark audio` fills
+`audio/` — so `ls` tells you the same thing this section does, and nothing has
+to explain that text comes before audio.
 
-Measured on an M-series Mac, `af_heart`, default model: **~4.6x realtime**. The
-22-minute "Attention Is All You Need" took 4 minutes 54 seconds to narrate.
+The other four are setup and housekeeping:
 
-The `fp16` and `int8` model variants are smaller on disk but not faster here —
-`int8` is 2.6x *slower*, because onnxruntime's CPU provider has no fast
-quantized kernels for this graph. Stick with the default unless you are short
-on disk.
+```bash
+earmark init [PATH]     create a library
+earmark config          edit its settings in $EDITOR
+earmark feed            what is published, and the feed URL
+earmark voices          list the voices, or hear one
+```
+
+Any step takes any source: a file, a URL, a Markdown file you edited, or — for
+`publish` — an MP3 that already exists.
+
+### Getting started
+
+```bash
+earmark init ~/pCloud\ Drive/public/audio --base-url https://filedn.com/XXXX/audio
+earmark publish https://example.com/some-long-article
+earmark feed                          # paste this URL into your podcast app
+```
+
+`init` records that library as your default, so the commands work from
+anywhere. To use a different one, `cd` into it or pass `--library PATH`.
+
+### Editing before you listen
+
+Extraction is good, not perfect — a mangled equation, a stray caption, a
+section you don't care about. So the Markdown is a real stopping point:
+
+```bash
+$ earmark text paper.pdf
+text/some-paper.md  (4,210 words)
+   edit it, then:  earmark publish text/some-paper.md
+```
+
+Each step names the one that follows it, so the chain is something you learn by
+using it rather than by reading this. Fix the mangled equation, cut the section
+you don't care about, then run what it told you.
+
+Files earmark wrote carry `earmark: cleaned` in their front matter, and are
+narrated **exactly as they stand** — your edits are never re-cleaned. Markdown
+from anywhere else goes through the cleaner like any other source.
+
+`audio` and `publish` write the Markdown too, so you can always go back and fix
+something without re-extracting. And `audio` happily takes a Markdown file you
+wrote yourself, or any document that never came from earmark at all.
+
+## Multiple libraries
+
+A library is a folder with an `earmark.toml` in it, and earmark finds the one
+you mean by looking, in order, at:
+
+1. `--library PATH`
+2. `$EARMARK_LIBRARY`
+3. an `earmark.toml` in the working directory or any parent
+4. the default recorded by `earmark init`
+
+So separate feeds — papers, fiction, things for the commute — need no
+configuration beyond making them:
+
+```bash
+earmark init ~/public/papers  --base-url https://example.com/papers
+earmark init ~/public/fiction --base-url https://example.com/fiction --no-default
+
+cd ~/public/fiction && earmark publish a-novel.epub    # goes to the fiction feed
+```
+
+## Configuration
+
+`earmark config` opens the library's `earmark.toml` in `$EDITOR`. A
+command-line flag always wins over the file.
+
+```toml
+voice = "af_bella"
+speed = 1.1
+profile = "paper"
+
+# Run after every publish, from inside the library. Only needed if your
+# library is not already a folder that syncs to the web.
+# after_publish = "git add -A && git commit -m 'earmark' && git push"
+
+# Fix a mispronunciation once instead of every time.
+[replace]
+BEV = "battery electric vehicle"
+
+[feed]
+base_url = "https://filedn.com/XXXX/audio"
+title = "John's Reading Pile"
+author = "John Helveston"
+description = "Things I meant to read."
+cover = "cover.jpg"
+```
+
+`earmark config --show` prints every setting in effect, where it came from, and
+every path earmark is using.
+
+`[feed]` is deliberately the last table in the file. TOML puts a key you add at
+the bottom into whichever table came before it, and an unknown key under
+`[feed]` warns loudly, where an extra entry under `[replace]` would look like a
+word you wanted respoken.
+
+## Publishing anywhere
+
+If your library folder is already on the web, publishing is finished the moment
+the file is written — there is nothing to upload.
+
+If it isn't, `after_publish` is one line of shell that runs inside the library
+once the feed is written:
+
+| Host | `after_publish` |
+|---|---|
+| **GitHub Pages** | `git add -A && git commit -m earmark && git push` |
+| **S3 / R2 / B2 / Drive** | `rclone sync . r2:my-bucket/audio` |
+| **Your own server** | `rsync -a --delete . me@host:/var/www/audio/` |
+
+Set `base_url` to wherever those end up, and `earmark feed --check` will HEAD
+the feed, the cover and the newest episodes to prove the URLs really serve.
+
+## Cover art
+
+Put an image in the library and name it:
+
+```toml
+[feed]
+cover = "cover.jpg"
+```
+
+Every publish re-normalizes it: transparency flattened onto white (a
+transparent PNG renders wrong in Apple Podcasts), padded to square, scaled, and
+compressed until it is under Apple's 512 KB ceiling. Non-square art is
+**padded, never cropped** — cropping silently eats part of a logo.
+
+This matters more than it sounds like it should, because a non-compliant
+`<itunes:image>` produces no error anywhere: the app just shows its grey
+placeholder and the feed still validates.
+
+Already have artwork hosted somewhere? Use `image = "https://..."` instead and
+earmark will pass the URL straight through.
 
 ## Why the text cleaning matters
 
@@ -93,8 +237,8 @@ bibliography. `earmark` rewrites first:
 Check what will be spoken before spending the compute:
 
 ```bash
-earmark text paper.pdf --profile paper | less   # read it first
-earmark paper.pdf --dry-run                     # how long is this?
+earmark text paper.pdf --profile paper --stdout | less
+earmark audio paper.pdf --dry-run              # how long is this?
 ```
 
 The `paper` profile also cuts the title page, authors and affiliations, so the
@@ -111,9 +255,7 @@ meaning: a rule that can only fire in the last 45% of a page cannot eat an
 argument in the middle of one.
 
 Profiles (`article`, `paper`, `book`) preset the rules; individual flags
-(`--keep-references`, `--tables describe`, `--say-code`, …) override them. A
-`[clean.replace]` table in `~/.config/earmark/config.toml` fixes any word the
-narrator mispronounces.
+(`--keep-references`, `--tables describe`, `--say-code`, …) override them.
 
 ## Choosing a voice
 
@@ -125,7 +267,7 @@ large, so the list is annotated with Kokoro's own grades:
 earmark voices                    # graded, grouped by language
 earmark voices --lang b           # British only
 earmark voices --all              # including the ones graded D or worse
-earmark paper.pdf --voice af_bella
+earmark audio paper.pdf --voice af_bella
 ```
 
 ```
@@ -152,182 +294,27 @@ earmark voices --try af_bella
 earmark voices --try bf_emma --text "Whatever you like."
 ```
 
-Set a favourite once in `~/.config/earmark/config.toml`:
-
-```toml
-voice = "af_bella"
-```
+Set a favourite once with `earmark config`.
 
 Kokoro's [VOICES.md][voices] has the full grade table with training-data
 volumes, and the [official demo Space][kokoro-demo] lets you audition voices in
 a browser.
 
-## Configuration
+The 354 MB model downloads itself the first time you convert something, after
+asking. It lives with your application data, not in the library — you do not
+want it syncing to a public folder.
 
-Defaults live in `~/.config/earmark/config.toml`. A command-line flag always
-wins over the file.
+## Speed and caching
 
-```bash
-earmark config init     # write a commented starter file
-earmark config edit     # open it in $EDITOR
-earmark config show     # what is in effect, and where each value came from
-earmark config path
-```
+Synthesis runs at roughly **4.6x realtime** on an M-series Mac with `af_heart`.
 
-```toml
-voice = "af_heart"      # see: earmark voices
-speed = 1.1
-profile = "paper"
-output_dir = "~/Audiobooks"
+It is also cached per chunk, keyed on the text, the voice, the speed and the
+model, so re-running a document you edited re-synthesizes only what changed: a
+22-minute paper re-renders in **8 seconds** instead of 4 minutes 54. The cache
+trims itself — entries untouched for 90 days go, and the least recently used go
+after that if it passes 2 GB.
 
-# Fix a mispronunciation once instead of every time.
-[clean.replace]
-BEV = "battery electric vehicle"
-```
-
-A misspelled setting warns instead of vanishing silently, and a value that
-cannot be used (`speed = 9.0`) stops the run and names itself rather than
-failing somewhere deep in the synthesizer. `earmark config show` still works on
-a file with mistakes in it, which is the point.
-
-## Publishing to a podcast feed
-
-This is what turns a folder of MP3s into something you actually listen to.
-`earmark` builds a standard podcast RSS feed; you subscribe to it once in
-Overcast, Pocket Casts, AntennaPod or anything else that takes a feed URL, and
-every document you convert shows up on your phone with playback-position sync.
-
-**earmark does not host anything.** It needs two things from you: somewhere to
-put files, and the public URL those files appear at. That keeps you in control
-of where your audio lives, and means any host works — including one earmark has
-never heard of.
-
-### The four publishers
-
-| Publisher | Use it when | Needs |
-|---|---|---|
-| `folder` | Anything that syncs a local directory to the web | `folder`, `base_url` |
-| `rclone` | Any object store — S3, R2, B2, Drive, WebDAV, SFTP, 70+ others | `remote`, `base_url` |
-| `command` | You have your own way of shipping a file | `command`, `base_url` |
-| `github` | You have no storage, but you do have GitHub | `repo`, `base_url` |
-
-`folder` is the general one and covers most services without a line of code:
-whatever already turns a directory into URLs does the work. Adding a new host
-usually means adding a recipe below, not a publisher.
-
-### Recipes
-
-**pCloud** (Public Folder is a Premium feature; enable it once at my.pcloud.com):
-
-```bash
-earmark feed init \
-  --publisher folder \
-  --folder "~/pCloud Drive/public/earmark" \
-  --base-url "https://filedn.com/YOUR-ID/earmark" \
-  --title "My Reading Pile"
-```
-
-**iCloud Drive / Syncthing / an nginx docroot / any synced folder** — identical,
-with the folder and the public base URL that service gives you.
-
-**Dropbox and Google Drive do not work**, and it is worth knowing why before you
-try. Neither gives a folder a public *path*. Each file gets its own random share
-link (`.../scl/fi/<id>/<file>?rlkey=…`), and that link serves an HTML preview
-page rather than the file until you add `?dl=1`. A podcast `<enclosure>` needs a
-stable, predictable, direct URL, and there is no base URL you can hang one off.
-Use `rclone` with a real object store instead.
-
-**Cloudflare R2, Backblaze B2, S3, Google Drive, WebDAV, SFTP** — configure the
-remote once with `rclone config`, then:
-
-```bash
-earmark feed init --publisher rclone \
-  --remote "r2:my-bucket/earmark" \
-  --base-url "https://media.example.com/earmark"
-```
-
-**Your own server:**
-
-```bash
-earmark feed init --publisher command \
-  --command "scp {local} me@example.com:/srv/earmark/{name}" \
-  --base-url "https://example.com/earmark"
-```
-
-**GitHub Pages** — free, but a published site is capped at 1 GB (~35 hours of
-audio) with a 100 MB per-file limit. Because git keeps deleted blobs forever,
-earmark rewrites the branch as a single commit on each push so the repo tracks
-the size of the current feed rather than its whole history:
-
-```bash
-earmark feed init --publisher github \
-  --repo ~/gh/my-feed \
-  --base-url "https://you.github.io/my-feed"
-```
-
-### Using it
-
-```bash
-earmark publish paper.pdf       # convert, then add to the feed
-earmark feed url                # paste this into your podcast app
-earmark feed cover logo.png     # the artwork your podcast app shows
-earmark feed list               # what's published, and how much space it uses
-earmark feed doctor             # prove the URLs actually serve
-earmark feed prune --keep 40    # drop the oldest episodes
-earmark feed prune --orphans    # drop files the feed no longer lists
-```
-
-`earmark feed doctor` is the one to run first. Whatever host you picked, it
-fetches the feed and the newest episodes over HTTP and tells you whether a
-podcast app would actually be able to download them — which catches the usual
-mistake of a `base_url` that does not point at the same place your publisher
-writes to.
-
-### Cover art
-
-Without artwork your show is a grey square in a list of colourful ones. Point
-earmark at any image and it publishes a compliant one:
-
-```bash
-earmark feed cover ~/Pictures/my-logo.png
-earmark feed cover                          # print the current cover URL
-```
-
-Podcast apps are strict about this image and fail *silently* — a
-non-compliant cover shows the app's placeholder, with no error anywhere to tell
-you why. The rules are Apple's, and every major app follows them: square,
-1400×1400 minimum and 3000×3000 recommended, JPEG or PNG, RGB, **no
-transparency**, under 512 KB. A logo exported for a README typically breaks
-three of those at once — it is usually RGBA, often under 1400px, often over
-512 KB.
-
-So earmark does not ask you for a compliant file, it makes one: flatten onto a
-solid background, pad to square, scale to 3000×3000, and step the JPEG quality
-down until it fits the size budget. Your original is never touched. A
-non-square image is **padded, never cropped** — `--background` sets the colour,
-and `--size` the dimensions.
-
-`earmark feed doctor` fetches the cover along with the feed, which is the only
-way to find out the URL is wrong without waiting on a phone.
-
-Apps cache show artwork by URL and re-check it rarely, so a cover added after
-you subscribed can sit invisible for days. earmark puts a hash of the image in
-the URL (`cover.jpg?v=803e7d75`) — change the image and it becomes a new URL,
-which every app fetches at once. That gets you a fresh crawl, but Castbox in
-particular also keeps its own copy of a show's artwork server-side; if it is
-still showing a placeholder an hour later, unsubscribe and re-add the URL.
-
-`episodes.json` is the source of truth and `feed.xml` is rebuilt from it every
-time, so retitling, re-hosting and pruning are all safe. A copy is published
-alongside the feed so it survives losing your laptop.
-
-> **Anything you publish is readable by anyone with the URL.** These links are
-> unguessable, not private. That is fine for open-access papers, preprints and
-> public articles; think before publishing paywalled or copyrighted material.
-> Publishing is never automatic — it takes an explicit `publish` (or the
-> equivalent `--publish` flag on `read`).
-
-### Subscribing on your phone
+## Subscribing on your phone
 
 This is the part that isn't obvious, because a private feed is not in any
 podcast directory — you can't find it by searching for its name. You subscribe
@@ -336,8 +323,11 @@ by handing the app the URL itself.
 **1. Get the URL, on the computer:**
 
 ```bash
-$ earmark feed url
-https://media.example.com/earmark/feed.xml
+$ earmark feed
+2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+
+1 episode(s), 10 MB total
+feed      https://filedn.com/XXXX/audio/feed.xml
 ```
 
 **2. Get that string onto your phone.** Text it to yourself, email it, or put it
@@ -370,6 +360,16 @@ force-refresh the show, or unsubscribe and re-subscribe, if you're impatient.
 The feed needs no authentication, so nothing else is required. If you ever move
 to a host behind HTTP basic auth, Castbox and Overcast both accept credentials
 inlined as `https://user:pass@host/path`.
+
+## Housekeeping
+
+```bash
+earmark feed --check                  # do the published URLs actually serve?
+earmark feed --rebuild                # rewrite feed.xml and the cover
+earmark feed --prune --keep 20        # drop all but the newest 20
+earmark feed --prune --max-size 800MB
+earmark feed --prune --orphans        # delete files the feed no longer lists
+```
 
 ## License
 

@@ -80,3 +80,19 @@ def duration_seconds(samples: int, rate: int = SAMPLE_RATE) -> float:
 def format_duration(seconds: float) -> str:
     total = int(round(seconds))
     return f"{total // 3600:d}:{total % 3600 // 60:02d}:{total % 60:02d}"
+
+
+def probe_duration(path) -> float:
+    """Length of an existing audio file, in seconds.
+
+    mutagen is already a dependency for ID3 tags and reads the header without
+    decoding, so publishing a file someone else made costs no ffmpeg run.
+    """
+    from pathlib import Path
+
+    import mutagen
+
+    handle = mutagen.File(str(Path(path)))
+    if handle is None or handle.info is None:
+        raise RuntimeError(f"could not read an audio duration from {path}")
+    return float(handle.info.length)

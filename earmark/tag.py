@@ -65,3 +65,25 @@ def read(path: Path) -> dict:
 
     tags = ID3(str(path))
     return {frame: str(tags[frame]) for frame in tags}
+
+
+# ID3 frame -> the metadata field it carries.
+_SUMMARY_FRAMES = {"TIT2": "title", "TPE1": "author", "TDRC": "date"}
+
+
+def summary(path: Path) -> dict:
+    """Title, author and date from an existing file's tags, where they exist.
+
+    Used when publishing an MP3 earmark did not make: whatever the file already
+    says about itself beats a filename.
+    """
+    try:
+        frames = read(path)
+    except Exception:
+        return {}
+    out = {}
+    for frame, field in _SUMMARY_FRAMES.items():
+        value = (frames.get(frame) or "").strip()
+        if value:
+            out[field] = value
+    return out

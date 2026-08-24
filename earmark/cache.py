@@ -129,3 +129,33 @@ def clear(older_than_days: float | None = None) -> tuple[int, int]:
         if directory.is_dir() and not any(directory.iterdir()):
             directory.rmdir()
     return removed, freed
+
+
+# The cache exists to make a re-run of the same document fast, and to make an
+# edit to one paragraph cost one paragraph. Neither needs history: an entry
+# untouched for a season will not be wanted, and the ceiling stops a year of
+# reading from quietly filling a disk. Both are enforced after a run rather
+# than by a command, because a cache the user has to remember to empty is a
+# cache that fills up.
+MAX_AGE_DAYS = 90
+MAX_BYTES = 2_000_000_000
+
+
+def autoprune(max_bytes: int = MAX_BYTES, max_age_days: float = MAX_AGE_DAYS) -> tuple[int, int]:
+    """Drop stale entries, then the least recently used, until under budget."""
+    removed, freed = clear(max_age_days)
+
+    paths = entries()
+    stats = [(p, p.stat()) for p in paths]
+    total = sum(s.st_size for _, s in stats)
+    if total <= max_bytes:
+        return removed, freed
+
+    for path, stat in sorted(stats, key=lambda pair: pair[1].st_atime):
+        if total <= max_bytes:
+            break
+        path.unlink(missing_ok=True)
+        total -= stat.st_size
+        freed += stat.st_size
+        removed += 1
+    return removed, freed
