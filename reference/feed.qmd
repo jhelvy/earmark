@@ -39,7 +39,7 @@ or cover image.
 
 HEADs the feed, the cover and the newest episodes and reports which of them
 actually serve. This is the fastest diagnosis for "the app shows nothing", which
-is almost always a wrong `base_url` — a failure that otherwise produces no error
+is almost always a wrong `base_url`, a failure that otherwise produces no error
 anywhere.
 
 ## `--prune`
@@ -53,7 +53,7 @@ newest episodes that fit under it.
 ## `--orphans` deletes files
 
 `--prune` alone removes episodes from the feed. Adding `--orphans` also deletes
-library files the feed no longer lists — the leftover MP3s and Markdown from
+library files the feed no longer lists: the leftover MP3s and Markdown from
 episodes already dropped. It only runs alongside `--prune`, and `cover.jpg` is
 never treated as an orphan.
 :::

@@ -4,7 +4,7 @@ description: A private feed is in no directory, so you hand the app its URL.
 ---
 
 This is the part that isn't obvious. A private feed is not in any podcast
-directory — you cannot find it by searching for its name. You subscribe by
+directory. You cannot find it by searching for its name. You subscribe by
 handing the app the URL itself.
 
 ## 1. Get the URL, on the computer
@@ -27,11 +27,11 @@ The exact place differs:
 
 | App | Where the URL goes |
 |---|---|
-| **Castbox** | The **search bar** at the top — the same one you'd search a show's name in. Paste the URL, hit search, and the show comes back as the only result; tap it, then **Subscribe**. |
+| **Castbox** | The **search bar** at the top, the same one you'd search a show's name in. Paste the URL, hit search, and the show comes back as the only result; tap it, then **Subscribe**. |
 | **Overcast** | **+** → **Add URL** |
 | **Pocket Casts** | **Profile** → **Add RSS feed** |
 | **AntennaPod** | **+** → **Add podcast by RSS address** |
-| **Apple Podcasts** | **Library** → **Edit** → *Add a Show by URL* — works, but unreliably; don't design around it |
+| **Apple Podcasts** | **Library** → **Edit** → *Add a Show by URL*. Works, but unreliably; don't design around it |
 
 Castbox is the one worth spelling out, because pasting a URL into a *search box*
 looks wrong. It isn't: Castbox detects that what you pasted is a feed rather
@@ -54,7 +54,7 @@ first, before blaming the app:
 earmark feed --check
 ```
 
-Artwork and show titles are a separate matter — every app caches them
+Artwork and show titles are a separate matter: every app caches them
 aggressively, so a cover you add later can take hours to appear even when
 episodes are arriving fine.
 

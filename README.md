@@ -41,10 +41,10 @@ earmark publish SOURCE   ->  feed.xml            all of the above
 ```
 
 `publish` runs the whole chain, so `earmark publish paper.pdf` is all you ever
-need to type. The other three commands are setup and housekeeping: `init`,
+need to type. The other four commands are setup and housekeeping: `init`,
 `config`, `feed`, `voices`.
 
-Everything earmark makes lands in one folder you choose — your **library** —
+Everything earmark makes lands in one folder you choose, your **library**,
 which is meant to be a folder served on the public web. There is no `library`
 setting anywhere, because the library is the folder its `earmark.toml` sits in.
 
@@ -58,7 +58,7 @@ setting anywhere, because the library is the folder its `earmark.toml` sits in.
 | [The pipeline](https://jhelvy.github.io/earmark/user-guide/the-pipeline.html) | `text`, `audio`, `publish`, and editing in between |
 | [Text cleaning](https://jhelvy.github.io/earmark/user-guide/text-cleaning.html) | what gets rewritten before anything is spoken |
 | [Choosing a voice](https://jhelvy.github.io/earmark/user-guide/voices.html) | 54 voices and how to pick one |
-| [Publishing anywhere](https://jhelvy.github.io/earmark/user-guide/publishing.html) | GitHub Pages, rclone, rsync — one line each |
+| [Publishing anywhere](https://jhelvy.github.io/earmark/user-guide/publishing.html) | GitHub Pages, rclone, rsync - one line each |
 | [Subscribing on your phone](https://jhelvy.github.io/earmark/user-guide/subscribing.html) | where the feed URL goes in each app |
 | [Reference](https://jhelvy.github.io/earmark/reference/) | every command, flag and config key |
 

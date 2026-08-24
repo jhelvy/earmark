@@ -3,7 +3,7 @@ title: The library
 description: Why a library is a folder, and how earmark finds the one you mean.
 ---
 
-Everything earmark makes lives in one folder you choose — your **library**.
+Everything earmark makes lives in one folder you choose, your **library**.
 
 ```
 ~/pCloud Drive/public/audio/     <- the library
@@ -20,20 +20,19 @@ Everything earmark makes lives in one folder you choose — your **library**.
 
 Podcast apps need a URL they can fetch without logging in. earmark writes files;
 your folder does the rest. A pCloud or Dropbox public folder, an nginx docroot,
-a synced WebDAV share, a GitHub Pages repo — all fine.
+a synced WebDAV share, a GitHub Pages repo. All fine.
 
 This is why writing the MP3 *is* publishing it, for most setups. If your folder
 is already on the web, there is nothing to upload. If it isn't, one line of
-shell closes the gap — see [Publishing anywhere](07-publishing.qmd).
+shell closes the gap. See [Publishing anywhere](07-publishing.qmd).
 
 ## `earmark.toml` lives inside it
 
 There is no `library =` setting anywhere, and there never will be, because **the
-library is the folder its config sits in**. Two things follow from that, and
-both are the point:
+library is the folder its config sits in**. Two things follow:
 
 - **A library is portable.** Move the folder, rename it, put it on another
-  machine — nothing breaks, because nothing outside it names its location.
+  machine, and nothing breaks, because nothing outside it names its location.
 - **Multiple libraries are free.** They need no registry and no configuration
   beyond making them, because `cd` is how you switch.
 
@@ -62,7 +61,7 @@ earmark publish paper.pdf --library ~/public/papers
 
 ## Several libraries
 
-Separate feeds — papers, fiction, things for the commute — need no setup beyond
+Separate feeds (papers, fiction, things for the commute) need no setup beyond
 creating them:
 
 ```bash

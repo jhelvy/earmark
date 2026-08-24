@@ -35,7 +35,7 @@ profile set.
 | Profile | What it changes |
 |---|---|
 | `article` (default) | Tables dropped, references cut, citations and links stripped. Author-year citations are **kept**, because `(and it was cheap, too)` looks a lot like `(Smith et al., 2020)` to a regex, and web prose is full of the former. |
-| `paper` | Everything `article` does, plus author-year citations stripped and the title page, authors and affiliations cut — so the audio opens at the abstract. |
+| `paper` | Everything `article` does, plus author-year citations stripped and the title page, authors and affiliations cut, so the audio opens at the abstract. |
 | `book` | Tables described rather than dropped, and the back matter kept, because a book's back matter may be a real chapter. |
 
 ```bash
@@ -49,7 +49,7 @@ a PDF's own metadata is usually empty.
 ## PDFs get a pass of their own first
 
 A PDF has no idea what a paragraph is, so the extracted text arrives with
-footnotes, page numbers and running heads spliced into the prose — an abstract
+footnotes, page numbers and running heads spliced into the prose: an abstract
 that runs straight on into "Equal contribution. Listing order is random", or a
 paragraph interrupted by the footnote hanging off its last line.
 
@@ -68,7 +68,7 @@ they look:
 
 An inline superscript like `gradients 4.` is only stripped when a footnote with
 that number was actually cut from the same page, and never after a word like
-"Table" or "Figure" — which is what keeps "see Table 4." intact.
+"Table" or "Figure", which is what keeps "see Table 4." intact.
 
 ## Fixing a pronunciation once
 
@@ -85,9 +85,9 @@ Matched on word boundaries, longest key first. See
 
 ## When cleaning is not enough
 
-Everything above is heuristics, and heuristics miss. That is exactly why
+Everything above is heuristics, and heuristics miss. That is why
 `earmark text` exists as its own stopping point: read the Markdown, fix the one
 thing the rules got wrong, and narrate the file you fixed. Your edits are never
-re-cleaned — see [The pipeline](04-the-pipeline.qmd).
+re-cleaned; see [The pipeline](04-the-pipeline.qmd).
 
 Every cleaning flag is listed under [`earmark text`](../reference/text.qmd).

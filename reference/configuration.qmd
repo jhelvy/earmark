@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Every key in earmark.toml — types, defaults, and what reads them.
+description: "Every key in earmark.toml: types, defaults, and what reads them."
 ---
 
 `earmark.toml` lives inside the library and marks the folder it sits in as one.
@@ -17,7 +17,7 @@ this file sits in.
 | Key | Type | Default | Accepts | Read by |
 |---|---|---|---|---|
 | `voice` | string | `"af_heart"` | any name from [`earmark voices`](voices.qmd) | `audio`, `publish` |
-| `speed` | number | `1.0` | `0.5`–`2.0` | `audio`, `publish` |
+| `speed` | number | `1.0` | `0.5` to `2.0` | `audio`, `publish` |
 | `lang` | string | `"en-us"` | a language code | `audio`, `publish` |
 | `profile` | string | `"article"` | `article`, `paper`, `book` | `text`, `audio`, `publish` |
 | `model` | string | `"full"` | `full`, `fp16`, `int8` | `audio`, `publish` |
@@ -41,7 +41,7 @@ if your library is not already a folder that syncs to the web.
 after_publish = "git add -A && git commit -m 'earmark' && git push"
 ```
 
-It is a config key rather than a plugin system on purpose — it covers every host
+It is a config key rather than a plugin system on purpose: it covers every host
 without earmark knowing the name of one. Recipes: [Publishing
 anywhere](../user-guide/publishing.qmd).
 
@@ -71,7 +71,7 @@ cover = "cover.jpg"
 `base_url` must start with `http://` or `https://`. Publishing without it stops
 with a message telling you to run `earmark config`.
 
-`cover` and `image` are not interchangeable — `image` disables the cover
+`cover` and `image` are not interchangeable: `image` disables the cover
 pipeline rather than racing it. See [Cover art](../user-guide/cover-art.qmd).
 
 ## `[replace]`

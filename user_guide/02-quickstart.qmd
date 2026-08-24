@@ -9,8 +9,8 @@ to. The only decision you have to make first is *where the folder lives*.
 ## 1. Make a library
 
 A library is a folder that is **served on the public web**. A pCloud or Dropbox
-public folder, an nginx docroot, a synced WebDAV share, a GitHub Pages repo —
-anything works, as long as a podcast app can fetch a URL from it without
+public folder, an nginx docroot, a synced WebDAV share, a GitHub Pages repo.
+Anything works, as long as a podcast app can fetch a URL from it without
 logging in.
 
 ```bash
@@ -35,7 +35,7 @@ That one command extracts the text, rewrites it into something that sounds good
 read aloud, narrates it, writes `audio/<name>.mp3`, and adds it to `feed.xml`.
 The first run stops to ask whether it may download the model.
 
-It works on documents too — PDF, DOCX, PPTX, EPUB, HTML, Markdown:
+It works on documents too: PDF, DOCX, PPTX, EPUB, HTML, Markdown.
 
 ```bash
 earmark publish paper.pdf
@@ -55,7 +55,7 @@ feed      https://filedn.com/XXXX/audio/feed.xml
 ```
 
 That last URL is what you paste into a podcast app. Because a private feed is
-not in any directory, you cannot find it by searching for its name — you hand
+not in any directory, you cannot find it by searching for its name. You hand
 the app the URL itself. [Subscribing on your phone](09-subscribing.qmd) covers
 where the URL goes in each app.
 

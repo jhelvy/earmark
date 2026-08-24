@@ -7,7 +7,7 @@ description: Edit or inspect a library's settings.
 earmark config [--show] [--path]
 ```
 
-With no flags, opens the library's `earmark.toml` in `$EDITOR` — falling back to
+With no flags, opens the library's `earmark.toml` in `$EDITOR`, falling back to
 `$VISUAL`, then `nano`.
 
 ## Options
@@ -27,8 +27,8 @@ came from; then the `[feed]` keys and the `[replace]` pairs.
 It is the fastest answer to "which library am I acting on?" and "where did the
 model actually go?".
 
-If the config has errors, `--show` still prints everything — that is the whole
-point of it — and then exits `1`.
+If the config has errors, `--show` still prints everything (that is the whole
+point of it) and then exits `1`.
 
 ## Errors and warnings
 

@@ -1,6 +1,6 @@
 ---
 title: The pipeline
-description: text, audio, publish — one chain you can stop at any of three points.
+description: "text, audio, publish: one chain you can stop at any of three points."
 ---
 
 Three of the seven commands are one pipeline stopped at three different points.
@@ -14,7 +14,7 @@ earmark publish SOURCE   ->  feed.xml            all of the above
 
 Each command is a prefix of the next. `publish` runs the whole chain, so
 `earmark publish paper.pdf` is all you ever need to type. The other two exist
-for when you want to stop partway — to fix a mangled equation in the Markdown,
+for when you want to stop partway: to fix a mangled equation in the Markdown,
 or to narrate something without putting it on a feed.
 
 ## The names are the folders
@@ -28,7 +28,7 @@ reaches outside the library.
 
 ## Any step takes any source
 
-A file path, a URL, a Markdown file you edited, or — for `publish` — an MP3 that
+A file path, a URL, a Markdown file you edited, or, for `publish`, an MP3 that
 already exists. Handing `publish` an existing `.mp3`, `.m4a` or `.wav` adopts it
 onto the feed with no synthesis at all, which is how you put a recording you
 made elsewhere into the same feed.
@@ -38,7 +38,7 @@ boilerplate removal, so you get the article and not the nav rail.
 
 ## Editing before you listen
 
-Extraction is good, not perfect — a mangled equation, a stray caption, a section
+Extraction is good, not perfect: a mangled equation, a stray caption, a section
 you don't care about. So the Markdown is a real stopping point:
 
 ```bash
@@ -57,8 +57,8 @@ Files earmark wrote carry `earmark: cleaned` in their front matter, and are
 narrated **exactly as they stand**. Without that marker, `audio` would re-clean
 a file you hand-edited and undo the edit using the same rules that caused it.
 
-Markdown from anywhere else — a file you wrote yourself, a document that never
-came from earmark — goes through the cleaner like any other source.
+Markdown from anywhere else (a file you wrote yourself, a document that never
+came from earmark) goes through the cleaner like any other source.
 
 `audio` and `publish` write the Markdown too, so you can always go back and fix
 something without re-extracting:
@@ -85,7 +85,7 @@ earmark: cleaned
 
 It is deliberately not YAML: every line is `key: value`, split on the *first*
 colon, so a title may contain one. An unterminated `---` block is treated as
-body rather than front matter — a document that merely opens with a horizontal
+body rather than front matter: a document that merely opens with a horizontal
 rule should not lose its first half.
 
 Override any of the detected values with `--title`, `--author`, `--date`.

@@ -42,7 +42,7 @@ earmark publish SOURCE   ->  feed.xml            all of the above
 need to type. The other four commands are setup and housekeeping: `init`,
 `config`, `feed`, `voices`.
 
-Everything earmark makes lands in one folder you choose — your **library** —
+Everything earmark makes lands in one folder you choose (your **library**),
 which is meant to be a folder served on the public web. There is no `library`
 setting anywhere, because the library is the folder its `earmark.toml` sits in.
 
@@ -55,6 +55,6 @@ setting anywhere, because the library is the folder its `earmark.toml` sits in.
 | [The pipeline](user-guide/the-pipeline.qmd) | `text`, `audio`, `publish`, and editing in between |
 | [Text cleaning](user-guide/text-cleaning.qmd) | what gets rewritten before anything is spoken |
 | [Choosing a voice](user-guide/voices.qmd) | 54 voices and how to pick one |
-| [Publishing anywhere](user-guide/publishing.qmd) | GitHub Pages, rclone, rsync — one line each |
+| [Publishing anywhere](user-guide/publishing.qmd) | GitHub Pages, rclone, rsync: one line each |
 | [Subscribing on your phone](user-guide/subscribing.qmd) | where the feed URL goes in each app |
 | [Reference](reference/index.qmd) | every command, flag and config key |

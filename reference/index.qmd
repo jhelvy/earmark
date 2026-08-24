@@ -11,11 +11,11 @@ description: Every command, every flag, every configuration key.
 | [`earmark config`](config.qmd) | edit or inspect a library's settings |
 | [`earmark text`](text.qmd) | step 1: a source → `text/<name>.md`, yours to edit |
 | [`earmark audio`](audio.qmd) | step 2: a source or a `.md` → `audio/<name>.mp3` |
-| [`earmark publish`](publish.qmd) | step 3 — plus 1 and 2 if needed: anything → your feed |
+| [`earmark publish`](publish.qmd) | step 3, plus 1 and 2 if needed: anything → your feed |
 | [`earmark feed`](feed.qmd) | show, rebuild or trim your feed |
 | [`earmark voices`](voices.qmd) | list available voices, or hear one |
 
-Plus [`earmark.toml`](configuration.qmd) — every configuration key.
+Plus [`earmark.toml`](configuration.qmd): every configuration key.
 
 ## The pipeline
 

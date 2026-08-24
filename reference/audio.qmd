@@ -27,13 +27,13 @@ Shared with [`publish`](publish.qmd).
 | Flag | Default | Means |
 |---|---|---|
 | `-v`, `--voice VOICE` | `af_heart` | see [`earmark voices`](voices.qmd) |
-| `-s`, `--speed SPEED` | `1.0` | 0.5–2.0 |
+| `-s`, `--speed SPEED` | `1.0` | 0.5 to 2.0 |
 | `--lang LANG` | `en-us` | language code |
 | `--model {full,fp16,int8}` | `full` | Kokoro model variant |
 | `--engine {kokoro,say}` | `kokoro` | speech backend |
 
 `fp16` and `int8` are smaller and faster and sound worse. `--engine say` uses
-macOS's built-in `say` and needs no model at all — useful for checking that a
+macOS's built-in `say` and needs no model at all, useful for checking that a
 long document chunks and encodes before committing to a real render.
 
 ## Audio options

@@ -3,8 +3,8 @@ title: Choosing a voice
 description: 54 voices, a wide quality spread, and the fastest way to pick one.
 ---
 
-Kokoro ships 54 voices. The names encode a language and a gender — `af_heart` is
-American female, `bm_george` is British male — and the quality spread is large,
+Kokoro ships 54 voices. The names encode a language and a gender (`af_heart` is
+American female, `bm_george` is British male), and the quality spread is large,
 so earmark annotates the list with Kokoro's own grades.
 
 ```bash
@@ -35,7 +35,7 @@ Only two voices are graded A. `af_heart` is the default and `af_bella` the
 runner-up; `am_michael` or `am_puck` are the best male voices, and `bf_emma` the
 best British one. Everything below B- is noticeably worse on a long listen.
 
-## Just hear it
+## Hear one
 
 Reading a grade table tells you less than three seconds of your own text does,
 and the model is already on disk:
@@ -57,7 +57,7 @@ A command-line flag always wins over the file, so a one-off stays a one-off.
 ## Speed
 
 `--speed` takes 0.5 to 2.0, default 1.0. Speeding up in earmark is not the same
-as speeding up in the player: the model synthesizes at the requested rate, so
+as speeding up in the player. The model synthesizes at the requested rate, so
 the result is a voice talking faster rather than a recording played faster.
 Most podcast apps can do the other thing on top.
 
@@ -65,7 +65,7 @@ Most podcast apps can do the other thing on top.
 
 The `--lang` filter on `earmark voices` takes a single-letter name prefix: `a`
 (American English), `b` (British English), `e`, `f`, `h`, `i`, `j`, `p`, `z`.
-The `--lang` flag on `audio` and `publish` is a different thing — a language
+The `--lang` flag on `audio` and `publish` is a different thing: a language
 code like `en-us` passed to the model.
 
 ## The `say` engine

@@ -29,8 +29,8 @@ Set `base_url` to wherever those files end up, not to where they start.
 
 There used to be four publishers built in: folder, rclone, command, and github.
 They are gone, because all four are the table above. A config key that runs
-your shell covers every host that exists — including the one you will use next
-year — without earmark knowing the name of any of them.
+your shell covers every host that exists, including the one you will use next
+year, without earmark knowing the name of any of them.
 
 So there is no plugin system to learn and no adapter to write. If a host isn't
 in that table, the answer is a different one-liner, not a feature request.
@@ -50,7 +50,7 @@ them actually serve.
 
 ## Episode filenames
 
-`audio` writes `audio/<slug>.mp3` and `publish` does not rename it — the two
+`audio` writes `audio/<slug>.mp3` and `publish` does not rename it. The two
 commands would otherwise disagree about where a document's audio lives.
 
 A content digest is still computed. It is the feed's `guid`, which is how

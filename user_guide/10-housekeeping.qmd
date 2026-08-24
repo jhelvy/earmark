@@ -12,7 +12,7 @@ model. Re-running a document you edited re-synthesizes only what changed: a
 22-minute paper re-renders in **8 seconds** instead of 4 minutes 54.
 
 That is what makes the edit-and-republish loop in [The
-pipeline](04-the-pipeline.qmd) practical rather than theoretical.
+pipeline](04-the-pipeline.qmd) practical.
 
 ```bash
 earmark audio paper.pdf --dry-run    # chunk count and duration, no synthesis
@@ -41,7 +41,7 @@ earmark feed --prune --orphans        # delete files the feed no longer lists
 ### `--orphans`
 
 Pruning an episode removes it from the feed. `--orphans` goes further and
-deletes library files the feed no longer lists — the leftover MP3s and Markdown
+deletes library files the feed no longer lists: the leftover MP3s and Markdown
 from episodes that have already been dropped.
 
 It is the one destructive flag here, so it only runs alongside `--prune`.

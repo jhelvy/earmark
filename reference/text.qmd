@@ -10,7 +10,7 @@ earmark text SOURCE [--stdout] [--raw] [--force]
 
 Extracts `SOURCE`, cleans it, and writes `text/<name>.md` in the library. The
 file carries `earmark: cleaned` in its front matter, which means `audio` and
-`publish` will narrate it **exactly as it stands** — your edits are never
+`publish` will narrate it **exactly as it stands**: your edits are never
 re-cleaned.
 
 ## Arguments

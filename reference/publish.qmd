@@ -1,6 +1,6 @@
 ---
 title: earmark publish
-description: "Step 3 — plus 1 and 2 if needed: anything goes on your feed."
+description: "Step 3, plus 1 and 2 if needed: anything goes on your feed."
 ---
 
 ```
@@ -23,25 +23,25 @@ other two commands are optional.
 | `SOURCE` | a file path, a Markdown file, an MP3, or a URL |
 
 An existing `.mp3`, `.m4a` or `.wav` is **adopted** onto the feed with no
-synthesis at all — which is how a recording made elsewhere ends up in the same
+synthesis at all, which is how a recording made elsewhere ends up in the same
 feed as the things earmark narrated.
 
 ## Options
 
 Every flag of [`earmark audio`](audio.qmd), unchanged:
 
-- **voice** — `-v/--voice`, `-s/--speed`, `--lang`, `--model`, `--engine`
-- **audio** — `--bitrate`, `--sample-rate`, `--no-title-card`
-- **behaviour** — `--dry-run`, `--play`, `-q/--quiet`, `--no-cache`, `--refresh`
-- **metadata** — `--title`, `--author`, `--date`
-- **cleaning** — `--profile`, `--tables`, `--keep-references`, `--keep-citations`,
+- **voice**: `-v/--voice`, `-s/--speed`, `--lang`, `--model`, `--engine`
+- **audio**: `--bitrate`, `--sample-rate`, `--no-title-card`
+- **behaviour**: `--dry-run`, `--play`, `-q/--quiet`, `--no-cache`, `--refresh`
+- **metadata**: `--title`, `--author`, `--date`
+- **cleaning**: `--profile`, `--tables`, `--keep-references`, `--keep-citations`,
   `--keep-links`, `--say-code`, `--drop-sections`, `--skip-front-matter`,
   `--keep-front-matter`
 - `--library PATH`
 
 ## What it needs from the config
 
-`feed.base_url` — the public URL your library folder is served at. Without it
+`feed.base_url`: the public URL your library folder is served at. Without it
 publishing stops with a message telling you to run `earmark config`.
 
 If your library is not already a folder on the web, set `after_publish` to one

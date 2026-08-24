@@ -18,11 +18,11 @@ A non-compliant `<itunes:image>` produces **no error anywhere**. The feed still
 validates, the app shows its grey placeholder, and nothing in the chain tells
 you which of the rules you broke. Diagnosing that from a phone is miserable.
 
-So earmark does not ask you for a compliant file — it makes one. Apple's rules,
+So earmark does not ask you for a compliant file. It makes one. Apple's rules,
 which Castbox, Overcast, Pocket Casts and Spotify all follow:
 
 - square, 1400×1400 minimum, 3000×3000 recommended
-- JPEG or PNG, RGB — CMYK is rejected outright
+- JPEG or PNG, RGB; CMYK is rejected outright
 - **no transparency**; a PNG with an alpha channel renders wrong
 - under 512 KB
 
@@ -45,7 +45,7 @@ supplying a square image.
 | `cover` | A **file in the library**. earmark normalizes it on every publish and serves it from your `base_url`. |
 | `image` | A **URL** to artwork hosted somewhere else. earmark passes it straight through and does nothing to it. |
 
-`image` disables the cover pipeline rather than racing it — if both are set,
+`image` disables the cover pipeline rather than racing it: if both are set,
 `image` wins.
 
 ```toml
