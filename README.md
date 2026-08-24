@@ -65,19 +65,33 @@ running the tests, not for running the tool.
 
 ## The seven commands
 
+Three of them are one pipeline stopped at three different points. **A source
+becomes text, text becomes audio, audio goes on your feed:**
+
+```bash
+earmark text    SOURCE   ->  text/<name>.md      look at it, fix it
+earmark audio   SOURCE   ->  audio/<name>.mp3    narrate it
+earmark publish SOURCE   ->  feed.xml            all of the above
+```
+
+`publish` runs the whole chain, so `earmark publish paper.pdf` is all you ever
+need to type. The other two exist for when you want to stop partway.
+
+The names are the folders. `earmark text` fills `text/`, `earmark audio` fills
+`audio/` — so `ls` tells you the same thing this section does, and nothing has
+to explain that text comes before audio.
+
+The other four are setup and housekeeping:
+
 ```bash
 earmark init [PATH]     create a library
 earmark config          edit its settings in $EDITOR
-earmark read SOURCE     source          -> text/<slug>.md
-earmark convert SOURCE  source or .md   -> audio/<slug>.mp3
-earmark publish SOURCE  source, .md or .mp3 -> the feed
 earmark feed            what is published, and the feed URL
 earmark voices          list the voices, or hear one
 ```
 
-`read`, `convert` and `publish` are the same pipeline stopped at three
-different points. Any of them takes any source: a file, a URL, a Markdown file
-you edited, or — for `publish` — an MP3 that already exists.
+Any step takes any source: a file, a URL, a Markdown file you edited, or — for
+`publish` — an MP3 that already exists.
 
 ### Getting started
 
@@ -96,17 +110,22 @@ Extraction is good, not perfect — a mangled equation, a stray caption, a
 section you don't care about. So the Markdown is a real stopping point:
 
 ```bash
-earmark read paper.pdf                # -> text/some-paper.md
-$EDITOR library/text/some-paper.md    # fix it, cut things, add a note
-earmark publish library/text/some-paper.md
+$ earmark text paper.pdf
+text/some-paper.md  (4,210 words)
+   edit it, then:  earmark publish text/some-paper.md
 ```
+
+Each step names the one that follows it, so the chain is something you learn by
+using it rather than by reading this. Fix the mangled equation, cut the section
+you don't care about, then run what it told you.
 
 Files earmark wrote carry `earmark: cleaned` in their front matter, and are
 narrated **exactly as they stand** — your edits are never re-cleaned. Markdown
 from anywhere else goes through the cleaner like any other source.
 
-`convert` and `publish` write the Markdown too, so you can always go back and
-fix something without re-extracting.
+`audio` and `publish` write the Markdown too, so you can always go back and fix
+something without re-extracting. And `audio` happily takes a Markdown file you
+wrote yourself, or any document that never came from earmark at all.
 
 ## Multiple libraries
 
@@ -218,8 +237,8 @@ bibliography. `earmark` rewrites first:
 Check what will be spoken before spending the compute:
 
 ```bash
-earmark read paper.pdf --profile paper --stdout | less
-earmark convert paper.pdf --dry-run            # how long is this?
+earmark text paper.pdf --profile paper --stdout | less
+earmark audio paper.pdf --dry-run              # how long is this?
 ```
 
 The `paper` profile also cuts the title page, authors and affiliations, so the
@@ -248,7 +267,7 @@ large, so the list is annotated with Kokoro's own grades:
 earmark voices                    # graded, grouped by language
 earmark voices --lang b           # British only
 earmark voices --all              # including the ones graded D or worse
-earmark convert paper.pdf --voice af_bella
+earmark audio paper.pdf --voice af_bella
 ```
 
 ```

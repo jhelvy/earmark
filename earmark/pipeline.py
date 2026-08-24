@@ -1,7 +1,7 @@
 """Wiring the stages together: source in, Markdown out, MP3 out.
 
 Three stopping points on one line: extract+clean gives Markdown, chunk+
-synthesize gives audio, and the feed comes after. ``read``, ``convert`` and
+synthesize gives audio, and the feed comes after. ``text``, ``audio`` and
 ``publish`` each stop at a different one.
 """
 
@@ -57,7 +57,7 @@ def load(
     A file earmark itself wrote carries ``earmark: cleaned`` in its front
     matter, and is passed through verbatim. That is the whole point of the
     Markdown step: you edit the file, fix a mangled equation or cut a section,
-    and ``convert`` must not undo the edit with the same rules that caused it.
+    and ``audio`` must not undo the edit with the same rules that caused it.
     """
     reused = _reusable_markdown(source)
     if reused is not None:

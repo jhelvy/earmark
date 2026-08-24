@@ -5,11 +5,23 @@
 A Python CLI that turns documents and article URLs into a private podcast feed.
 Local Kokoro TTS, no API keys, no per-minute cost.
 
-Seven commands: `init`, `config`, `read`, `convert`, `publish`, `feed`,
-`voices`. `read`/`convert`/`publish` are one pipeline stopped at three points —
-Markdown, MP3, feed — and each is a prefix of the next. Adding an eighth
-command should feel expensive; the point of the surface is that it fits in a
-paragraph.
+Seven commands: `init`, `config`, `text`, `audio`, `publish`, `feed`, `voices`.
+`text`/`audio`/`publish` are one pipeline stopped at three points — Markdown,
+MP3, feed — and each is a prefix of the next. Adding an eighth command should
+feel expensive; the point of the surface is that it fits in a paragraph.
+
+**`text` and `audio` are named after the folders they write to**, and that is
+load-bearing rather than cute: it is the entire explanation of the order. Nobody
+needs telling that text precedes audio, and `ls` teaches the pipeline as well as
+`--help` does. If either folder is ever renamed, rename the command with it.
+`publish` is a verb because it is the one step that reaches outside the library.
+
+The ordering is also signposted twice at runtime, because a three-step pipeline
+that only reveals itself in a README will be run wrong: `EPILOG` prints the
+chain in order, and `_next_step()` makes each command name its successor on
+stderr (stderr so `earmark text x.pdf | pbcopy` stays clean). `publish`'s help
+has to keep saying it runs the whole chain — that it works from a bare source
+is the least guessable thing about the design.
 
 ## The library is the unit
 
@@ -29,9 +41,9 @@ model, the chunk cache, and that one-line pointer.
 
 ## Front matter is what makes the Markdown step real
 
-`earmark read` writes `earmark: cleaned` into the front matter, and
+`earmark text` writes `earmark: cleaned` into the front matter, and
 `pipeline.load` passes such a file through **verbatim**. Without that marker,
-`convert` would re-clean a file the user hand-edited and undo the edit with the
+`audio` would re-clean a file the user hand-edited and undo the edit with the
 same rules that caused it. `frontmatter.py` is deliberately not YAML: every line
 is `key: value`, split on the *first* colon so titles may contain one.
 
@@ -109,7 +121,7 @@ back.** Add a recipe to the README's table.
 
 ### Episode filenames follow the slug
 
-`convert` writes `audio/<slug>.mp3` and `publish` must not rename it, or the two
+`audio` writes `audio/<slug>.mp3` and `publish` must not rename it, or the two
 commands would disagree about where a document's audio lives. The content digest
 is still computed — it is the feed's `guid`, and how re-publishing replaces an
 episode instead of duplicating it — but it is not in the filename.
@@ -154,7 +166,7 @@ user wanted respoken, and would be silently accepted.
 progress bar. There is no `models` command any more — a one-time download is
 not a thing to document. The files live in the data dir, never in the library.
 
-The cache prunes itself too (`cache.autoprune`, after every convert): entries
+The cache prunes itself too (`cache.autoprune`, after every `audio` run): entries
 untouched for 90 days, then LRU eviction above 2 GB.
 
 ## Testing
@@ -176,8 +188,8 @@ real 325 MB Kokoro model. `conftest.py` redirects `paths.cache_dir`,
 produces silence at a plausible speaking rate, so the whole pipeline including a
 real ffmpeg encode runs without the model).
 
-`test_cli.py` drives `main()` end to end with that fake backend — init, read,
-edit, convert, publish — which is the only place library resolution, front
+`test_cli.py` drives `main()` end to end with that fake backend — init, text,
+edit, audio, publish — which is the only place library resolution, front
 matter reuse and the feed meet.
 
 ## Two argparse traps already hit

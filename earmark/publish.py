@@ -44,7 +44,7 @@ class Site:
     def put(self, local: Path, name: str) -> None:
         """Place a file under its published name.
 
-        Files made by ``convert`` are already inside the library under a
+        Files made by ``earmark audio`` are already inside the library under a
         readable name; publishing renames them to the content-addressed name the
         feed uses. A file from outside is copied in.
         """

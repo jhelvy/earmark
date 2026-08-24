@@ -1,7 +1,7 @@
 """YAML-ish front matter on the Markdown earmark writes.
 
-``earmark read`` produces a file you are meant to edit by hand, and ``earmark
-convert`` then has to answer two questions about it: what is the title, and has
+``earmark text`` produces a file you are meant to edit by hand, and ``earmark
+audio`` then has to answer two questions about it: what is the title, and has
 this text already been through the cleaner? Re-cleaning an edited file would
 undo the edit with the same rules that made it, so the answer has to be written
 down rather than guessed.

@@ -14,10 +14,10 @@ def parse(argv):
     return build_parser().parse_args(argv)
 
 
-COMMANDS = ["init", "config", "read", "convert", "publish", "feed", "voices"]
+COMMANDS = ["init", "config", "text", "audio", "publish", "feed", "voices"]
 
 
-NEEDS_SOURCE = ("read", "convert", "publish")
+NEEDS_SOURCE = ("text", "audio", "publish")
 
 
 @pytest.mark.parametrize("name", COMMANDS)
@@ -26,7 +26,7 @@ def test_every_command_parses(name):
     assert parse(argv).command == name
 
 
-@pytest.mark.parametrize("name", ["read", "convert", "publish"])
+@pytest.mark.parametrize("name", ["text", "audio", "publish"])
 def test_the_pipeline_commands_take_a_source(name):
     assert parse([name, "paper.pdf"]).source == "paper.pdf"
 
@@ -37,8 +37,8 @@ def test_every_command_takes_library(name):
     assert args.library == "/tmp/lib"
 
 
-def test_cleaning_flags_reach_convert():
-    args = parse(["convert", "paper.pdf", "--profile", "paper", "-s", "1.2"])
+def test_cleaning_flags_reach_audio():
+    args = parse(["audio", "paper.pdf", "--profile", "paper", "-s", "1.2"])
     assert (args.profile, args.speed) == ("paper", 1.2)
 
 
@@ -185,52 +185,52 @@ def paper(tmp_path):
     return path
 
 
-def test_read_writes_markdown_into_the_library(lib, paper, capsys):
-    assert main(["read", str(paper), "--library", str(lib.root)]) == 0
+def test_text_writes_markdown_into_the_library(lib, paper, capsys):
+    assert main(["text", str(paper), "--library", str(lib.root)]) == 0
     out = lib.markdown_path("on-reading-things")
     assert out.is_file()
     assert "earmark: cleaned" in out.read_text()
-    assert str(out) in capsys.readouterr().out
+    assert out.name in capsys.readouterr().out
 
 
-def test_read_refuses_to_clobber_your_edits(lib, paper, capsys):
-    main(["read", str(paper), "--library", str(lib.root)])
+def test_text_refuses_to_clobber_your_edits(lib, paper, capsys):
+    main(["text", str(paper), "--library", str(lib.root)])
     lib.markdown_path("on-reading-things").write_text("mine", encoding="utf-8")
-    assert main(["read", str(paper), "--library", str(lib.root)]) == 1
+    assert main(["text", str(paper), "--library", str(lib.root)]) == 1
     assert lib.markdown_path("on-reading-things").read_text() == "mine"
     assert "--force" in capsys.readouterr().err
 
 
-def test_read_stdout_writes_no_file(lib, paper, capsys):
-    assert main(["read", str(paper), "--stdout", "--library", str(lib.root)]) == 0
+def test_text_stdout_writes_no_file(lib, paper, capsys):
+    assert main(["text", str(paper), "--stdout", "--library", str(lib.root)]) == 0
     assert not lib.markdown_path("on-reading-things").exists()
     assert "first paragraph" in capsys.readouterr().out
 
 
 @needs_ffmpeg
-def test_convert_writes_audio_and_keeps_the_markdown(lib, paper):
-    assert main(["convert", str(paper), "-q", "--library", str(lib.root)]) == 0
+def test_audio_writes_audio_and_keeps_the_markdown(lib, paper):
+    assert main(["audio", str(paper), "-q", "--library", str(lib.root)]) == 0
     assert lib.audio_path("on-reading-things").is_file()
     assert lib.markdown_path("on-reading-things").is_file()
 
 
 @needs_ffmpeg
-def test_convert_reuses_edited_markdown_verbatim(lib, paper, backend):
+def test_audio_reuses_edited_markdown_verbatim(lib, paper, backend):
     """Edit the Markdown, convert it, and hear what you typed."""
-    main(["read", str(paper), "--library", str(lib.root)])
+    main(["text", str(paper), "--library", str(lib.root)])
     md = lib.markdown_path("on-reading-things")
     md.write_text(md.read_text().replace("We did the thing", "We did something else"),
                   encoding="utf-8")
 
     backend.calls.clear()
-    assert main(["convert", str(md), "-q", "--library", str(lib.root)]) == 0
+    assert main(["audio", str(md), "-q", "--library", str(lib.root)]) == 0
     spoken = " ".join(backend.calls)
     assert "We did something else" in spoken
     assert "We did the thing" not in spoken
 
 
 def test_dry_run_synthesizes_nothing(lib, paper, backend, capsys):
-    assert main(["convert", str(paper), "--dry-run", "--library", str(lib.root)]) == 0
+    assert main(["audio", str(paper), "--dry-run", "--library", str(lib.root)]) == 0
     assert backend.calls == []
     assert not lib.audio_path("on-reading-things").exists()
     assert "chunks" in capsys.readouterr().out
@@ -249,7 +249,7 @@ def test_publish_puts_it_on_the_feed(lib, paper, capsys):
 
 @needs_ffmpeg
 def test_publish_an_mp3_synthesizes_nothing(lib, paper, backend, capsys):
-    main(["convert", str(paper), "-q", "--library", str(lib.root)])
+    main(["audio", str(paper), "-q", "--library", str(lib.root)])
     made = lib.audio_path("on-reading-things")
     backend.calls.clear()
 
@@ -309,8 +309,8 @@ def test_prune_needs_to_be_told_what_to_keep(lib, capsys):
 
 
 @pytest.mark.parametrize("argv", [
-    ["read", "x.pdf", "--library", "/tmp/L"],
-    ["--library", "/tmp/L", "read", "x.pdf"],
+    ["text", "x.pdf", "--library", "/tmp/L"],
+    ["--library", "/tmp/L", "text", "x.pdf"],
 ])
 def test_library_works_on_either_side_of_the_verb(argv):
     """A subparser writes its defaults over the parent's namespace, so the
@@ -319,4 +319,72 @@ def test_library_works_on_either_side_of_the_verb(argv):
 
 
 def test_library_defaults_to_none():
-    assert parse(["read", "x.pdf"]).library is None
+    assert parse(["text", "x.pdf"]).library is None
+
+
+# -- signposting ----------------------------------------------------------
+
+
+def test_help_shows_the_pipeline_in_order(capsys):
+    main([])
+    out = capsys.readouterr().out
+    assert out.index("earmark text") < out.index("earmark audio") < out.index("earmark publish")
+    assert "all of the above" in out
+
+
+def test_help_says_publish_runs_the_whole_chain(capsys):
+    main([])
+    assert "publish runs the whole chain" in capsys.readouterr().out
+
+
+def test_text_points_at_the_next_step(lib, paper, capsys):
+    main(["text", str(paper), "--library", str(lib.root)])
+    err = capsys.readouterr().err
+    assert "earmark publish" in err
+    assert lib.markdown_path("on-reading-things").name in err
+
+
+@needs_ffmpeg
+def test_audio_points_at_the_next_step(lib, paper, capsys):
+    main(["audio", str(paper), "-q", "--library", str(lib.root)])
+    assert "earmark publish" in capsys.readouterr().err
+
+
+def test_the_hint_stays_off_stdout(lib, paper, capsys):
+    """`earmark text x.pdf | pbcopy` has to stay clean."""
+    main(["text", str(paper), "--library", str(lib.root)])
+    captured = capsys.readouterr()
+    assert "earmark publish" not in captured.out
+    assert captured.out.strip().endswith("words)")
+
+
+@needs_ffmpeg
+def test_publish_needs_no_earlier_step(lib, paper):
+    """Handed only a source, publish does all three steps itself."""
+    assert main(["publish", str(paper), "-q", "--library", str(lib.root)]) == 0
+    assert lib.markdown_path("on-reading-things").is_file()
+    assert lib.audio_path("on-reading-things").is_file()
+    assert lib.feed_path.is_file()
+
+
+def test_the_command_names_are_the_folder_names(lib):
+    """`ls` should teach the pipeline as well as --help does."""
+    assert lib.text_dir.name == "text"
+    assert lib.audio_dir.name == "audio"
+
+
+def test_paths_print_relative_to_where_you_are(lib, paper, monkeypatch, capsys):
+    """Inside the library, `text/a-paper.md` is both shorter and what you type."""
+    monkeypatch.chdir(lib.root)
+    main(["text", str(paper)])
+    out = capsys.readouterr().out
+    assert out.startswith("text/on-reading-things.md")
+
+
+def test_a_path_outside_the_working_directory_stays_absolute(lib, paper, monkeypatch,
+                                                             tmp_path, capsys):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    main(["text", str(paper), "--library", str(lib.root)])
+    assert str(lib.markdown_path("on-reading-things")) in capsys.readouterr().out

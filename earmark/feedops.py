@@ -191,9 +191,9 @@ def _content_id(path: Path) -> str:
 def _episode_filename(title: str, mp3: Path) -> str:
     """The published name of an episode.
 
-    The slug and nothing else. ``convert`` already wrote ``audio/<slug>.mp3``,
-    and if publishing renamed it the two commands would disagree about where a
-    document's audio lives. Re-publishing therefore overwrites in place; the
+    The slug and nothing else. ``earmark audio`` already wrote
+    ``audio/<slug>.mp3``, and if publishing renamed it the two commands would
+    disagree about where a document's audio lives. Re-publishing therefore overwrites in place; the
     content digest still distinguishes episodes, as the feed's guid.
     """
     if mp3.parent.name == "audio":

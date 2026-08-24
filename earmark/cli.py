@@ -1,8 +1,14 @@
 """Command line interface.
 
 Seven commands, and three of them are the same pipeline stopped at a different
-point: ``read`` makes the Markdown, ``convert`` makes the MP3, ``publish`` puts
-it on the feed. Everything lands in the library.
+point: ``text`` makes the Markdown, ``audio`` makes the MP3, ``publish`` puts it
+on the feed. Everything lands in the library.
+
+The first two are named for what they produce, which is also the folder they
+write to -- ``text/`` and ``audio/``. That is the whole documentation of the
+order: nobody needs telling that text comes before audio, and ``ls`` shows the
+pipeline. ``publish`` is a verb rather than a noun because it is the one step
+that reaches outside the library.
 """
 
 from __future__ import annotations
@@ -13,13 +19,24 @@ from pathlib import Path
 
 from earmark import __version__
 
+# The pipeline is printed rather than explained. The confusion this exists to
+# prevent is not "what does each command do" -- it is "which one comes first,
+# and do I have to run them in turn". Both answers have to be visible without
+# reading a README.
 EPILOG = """\
-examples:
+the pipeline: a source becomes text, text becomes audio, audio goes on your feed.
+
+  earmark text    SOURCE   ->  text/<name>.md     look at it, fix it
+  earmark audio   SOURCE   ->  audio/<name>.mp3   narrate it
+  earmark publish SOURCE   ->  feed.xml           all of the above
+
+publish runs the whole chain, so `earmark publish paper.pdf` is all you need.
+The other two exist for when you want to stop partway -- to fix a mangled
+equation in the Markdown, or to narrate something without publishing it.
+
+setting up:
   earmark init ~/pCloud/public/audio --base-url https://filedn.com/XXXX/audio
   earmark config                        edit this library's settings
-  earmark read paper.pdf                -> text/paper-title.md, to edit by hand
-  earmark convert paper.pdf             -> audio/paper-title.mp3
-  earmark publish https://.../article   make it and put it on your feed
   earmark feed                          what is published, and the feed URL
 """
 
@@ -33,7 +50,7 @@ def _add_library(p: argparse.ArgumentParser, *, default) -> None:
     Every parser gets its *own* action rather than sharing one through
     ``parents=``: a subparser writes its defaults over the namespace the parent
     already filled in, so a shared action would make
-    ``earmark --library X read f.pdf`` parse fine and then act on the wrong
+    ``earmark --library X text f.pdf`` parse fine and then act on the wrong
     library. The top parser's ``None`` seeds the namespace; each subcommand's
     ``SUPPRESS`` means "leave it alone unless the flag was actually given".
     """
@@ -126,23 +143,22 @@ def build_parser() -> argparse.ArgumentParser:
     cfg.add_argument("--show", action="store_true", help="print the settings in effect and every path")
     cfg.add_argument("--path", dest="show_path", action="store_true", help="print the config file path")
 
-    read = _sub(sub, "read", help="turn a source into Markdown in the library")
-    read.add_argument("source", metavar="SOURCE", help="a file path or a URL")
-    read.add_argument("--stdout", action="store_true", help="print it instead of writing a file")
-    read.add_argument("--raw", action="store_true", help="the extracted Markdown, before cleaning")
-    read.add_argument("--force", action="store_true", help="overwrite an existing Markdown file")
-    _add_meta_args(read)
-    _add_clean_args(read)
+    text = _sub(sub, "text", help="step 1: a source -> text/<name>.md, yours to edit")
+    text.add_argument("source", metavar="SOURCE", help="a file path or a URL")
+    text.add_argument("--stdout", action="store_true", help="print it instead of writing a file")
+    text.add_argument("--raw", action="store_true", help="the extracted Markdown, before cleaning")
+    text.add_argument("--force", action="store_true", help="overwrite an existing Markdown file")
+    _add_meta_args(text)
+    _add_clean_args(text)
 
-    convert = _sub(sub, "convert",
-                   help="turn a source or a Markdown file into an MP3 in the library")
-    convert.add_argument("source", metavar="SOURCE", help="a file path, a Markdown file, or a URL")
-    _add_voice_args(convert)
-    _add_audio_args(convert)
-    _add_meta_args(convert)
-    _add_clean_args(convert)
+    audio = _sub(sub, "audio", help="step 2: a source or a .md -> audio/<name>.mp3")
+    audio.add_argument("source", metavar="SOURCE", help="a file path, a Markdown file, or a URL")
+    _add_voice_args(audio)
+    _add_audio_args(audio)
+    _add_meta_args(audio)
+    _add_clean_args(audio)
 
-    pub = _sub(sub, "publish", help="put a source, a Markdown file or an MP3 on your feed")
+    pub = _sub(sub, "publish", help="step 3 -- plus 1 and 2 if needed: anything -> your feed")
     pub.add_argument("source", metavar="SOURCE", help="a file path, a Markdown file, an MP3, or a URL")
     _add_voice_args(pub)
     _add_audio_args(pub)
@@ -349,7 +365,40 @@ def cmd_config(args) -> int:
     return subprocess.run([*editor.split(), str(lib.config_path)], check=False).returncode
 
 
-def cmd_read(args) -> int:
+def _display(path: Path) -> str:
+    """A path as short as it can be without becoming ambiguous.
+
+    Inside a library, ``text/a-paper.md`` beats sixty characters of absolute
+    path, and it is also exactly what you would type next.
+    """
+    path = Path(path)
+    try:
+        relative = path.resolve().relative_to(Path.cwd().resolve())
+    except ValueError:
+        return str(path)
+    return str(relative)
+
+
+def _next_step(command: str, path: Path) -> None:
+    """Name the command that follows this one.
+
+    The pipeline is only obvious once you have seen it, so each step points at
+    the next rather than waiting for someone to read --help. Printed to stderr,
+    so `earmark text x.pdf | pbcopy` stays clean -- which also means stdout has
+    to be flushed first, or the two streams interleave the wrong way round when
+    either is a pipe.
+    """
+    hints = {
+        "text": f"   edit it, then:  earmark publish {_display(path)}",
+        "audio": f"   put it on your feed:  earmark publish {_display(path)}",
+    }
+    hint = hints.get(command)
+    if hint:
+        sys.stdout.flush()
+        print(hint, file=sys.stderr)
+
+
+def cmd_text(args) -> int:
     from earmark import pipeline
     from earmark.extract import extract
 
@@ -371,12 +420,13 @@ def cmd_read(args) -> int:
         return 1
     pipeline.write_markdown(doc, out)
     words = len(doc.text.split())
-    print(f"{out}  ({words:,} words)")
+    print(f"{_display(out)}  ({words:,} words)")
+    _next_step("text", out)
     return 0
 
 
-def _convert(args, cfg, lib, *, quiet: bool = False):
-    """Produce (or reuse) the MP3 for a source. Shared by convert and publish."""
+def _render(args, cfg, lib, *, quiet: bool = False):
+    """Produce (or reuse) the MP3 for a source. Shared by `audio` and `publish`."""
     from earmark import audio, cache, pipeline
     from earmark.audio import format_duration
 
@@ -391,7 +441,7 @@ def _convert(args, cfg, lib, *, quiet: bool = False):
         if doc.meta.author:
             print(f"by {doc.meta.author}")
         print(f"{len(chunks)} chunks, {chars:,} characters, about {format_duration(seconds)}")
-        print(f"-> {out_path}")
+        print(f"-> {_display(out_path)}")
         return None, doc
 
     # Keep the Markdown beside the audio, so the next run can reuse or you can edit it.
@@ -442,15 +492,16 @@ def _cover_path(lib, cfg) -> Path | None:
     return path if path.is_file() else None
 
 
-def cmd_convert(args) -> int:
+def cmd_audio(args) -> int:
     from earmark.audio import format_duration
 
     lib, cfg = _open_library(args)
-    result, _ = _convert(args, cfg, lib)
+    result, _ = _render(args, cfg, lib)
     if result is None:
         return 0
     size_mb = result.path.stat().st_size / 1e6
-    print(f"{result.path}  ({format_duration(result.seconds)}, {size_mb:.1f} MB)")
+    print(f"{_display(result.path)}  ({format_duration(result.seconds)}, {size_mb:.1f} MB)")
+    _next_step("audio", result.path)
     if args.play:
         import subprocess
 
@@ -468,13 +519,13 @@ def cmd_publish(args) -> int:
     if _is_audio(args.source):
         mp3, meta, seconds, description = _adopt_audio(args, lib)
     else:
-        result, _ = _convert(args, cfg, lib)
+        result, _ = _render(args, cfg, lib)
         if result is None:
             return 0
         mp3, meta = result.path, result.meta
         seconds, description = result.seconds, result.excerpt
         size_mb = mp3.stat().st_size / 1e6
-        print(f"{mp3}  ({format_duration(seconds)}, {size_mb:.1f} MB)")
+        print(f"{_display(mp3)}  ({format_duration(seconds)}, {size_mb:.1f} MB)")
 
     feed = Feed.open(lib, cfg)
     cover = feed.refresh_cover()
@@ -704,8 +755,8 @@ class _Progress:
 HANDLERS = {
     "init": cmd_init,
     "config": cmd_config,
-    "read": cmd_read,
-    "convert": cmd_convert,
+    "text": cmd_text,
+    "audio": cmd_audio,
     "publish": cmd_publish,
     "feed": cmd_feed,
     "voices": cmd_voices,
