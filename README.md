@@ -5,7 +5,7 @@
 Turn the things you meant to read into a private podcast feed.
 
 ```bash
-earmark init ~/pCloud/public/audio --base-url https://filedn.com/XXXX/audio
+earmark init ~/pCloud\ Drive/public/audio --base-url https://filedn.com/XXXX/audio
 earmark publish paper.pdf
 ```
 

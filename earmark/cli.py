@@ -35,7 +35,8 @@ The other two exist for when you want to stop partway -- to fix a mangled
 equation in the Markdown, or to narrate something without publishing it.
 
 setting up:
-  earmark init ~/pCloud/public/audio --base-url https://filedn.com/XXXX/audio
+  earmark init ~/pCloud\\ Drive/public/audio \\
+      --base-url https://filedn.com/XXXX/audio
   earmark config                        edit this library's settings
   earmark feed                          what is published, and the feed URL
 """

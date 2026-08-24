@@ -7,13 +7,42 @@ If your library folder is already on the web, publishing is finished the moment
 the file is written. There is nothing to upload, and nothing to configure beyond
 `base_url`.
 
-If it isn't, `after_publish` is one line of shell that runs inside the library
-once the feed is written:
+## Where a library can live
+
+earmark builds every episode URL by appending to `base_url`, so
+`<base_url>/audio/some-paper.mp3` has to resolve. That one requirement decides
+which services can hold a library.
+
+| Works | `base_url` looks like |
+|---|---|
+| pCloud public folder | `https://filedn.com/XXXX/audio` |
+| Cloudflare R2, public bucket | `https://pub-xxxx.r2.dev` |
+| Backblaze B2, public bucket | `https://f000.backblazeb2.com/file/my-bucket` |
+| AWS S3, DigitalOcean Spaces, Wasabi, any S3-compatible bucket | `https://my-bucket.s3.amazonaws.com/audio` |
+| Your own server: nginx, Caddy, Apache | `https://example.com/audio` |
+| GitHub Pages, Netlify, Cloudflare Pages | `https://you.github.io/audio` |
+
+The big consumer sync services are the ones that cannot, which surprises people:
+
+| Cannot host a library | Why |
+|---|---|
+| Dropbox | The Public folder was retired in 2017. Every share link now points at one file and carries an `rlkey` token, so there is no folder URL to append to. |
+| Box | Direct links are `/shared/static/<hash>`, one per file. Folders have no direct link at all. |
+| Google Drive, OneDrive, iCloud Drive | The same shape: a link per file, nothing that serves a path under a folder. |
+
+That is not a reason to stop using them. Keep the library wherever you like and
+point `after_publish` at something that does serve, with `base_url` set to
+where the files land rather than where they start.
+
+## When the folder is not already on the web
+
+`after_publish` is one line of shell, run inside the library once the feed is
+written:
 
 | Host | `after_publish` |
 |---|---|
 | **GitHub Pages** | `git add -A && git commit -m earmark && git push` |
-| **S3 / R2 / B2 / Drive** | `rclone sync . r2:my-bucket/audio` |
+| **S3 / R2 / B2 / Spaces** | `rclone sync . r2:my-bucket/audio` |
 | **Your own server** | `rsync -a --delete . me@host:/var/www/audio/` |
 
 ```toml

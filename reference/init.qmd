@@ -35,7 +35,7 @@ now; `earmark config` can add it later.
 Without `--force`, `init` refuses to clobber an existing config and tells you so
 rather than silently doing nothing.
 
-`--no-default` matters when you keep more than one library — it stops a second
+`--no-default` matters when you keep more than one library: it stops a second
 `init` from stealing the default the first one set.
 
 ## Examples

@@ -19,8 +19,14 @@ Everything earmark makes lives in one folder you choose, your **library**.
 ## It should be a folder on the public web
 
 Podcast apps need a URL they can fetch without logging in. earmark writes files;
-your folder does the rest. A pCloud or Dropbox public folder, an nginx docroot,
-a synced WebDAV share, a GitHub Pages repo. All fine.
+your folder does the rest. A pCloud public folder, a public S3 or R2 bucket, an
+nginx docroot, a GitHub Pages repo. All fine.
+
+What matters is that appending a path to your `base_url` resolves:
+`<base_url>/audio/some-paper.mp3` has to be a real URL. Dropbox, Box, Google
+Drive and OneDrive cannot do that, however much storage you are paying them
+for. [Where a library can live](07-publishing.qmd#where-a-library-can-live) has
+the full list.
 
 This is why writing the MP3 *is* publishing it, for most setups. If your folder
 is already on the web, there is nothing to upload. If it isn't, one line of

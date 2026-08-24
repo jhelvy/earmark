@@ -206,6 +206,20 @@ runtime introspection (`dynamic: false`). earmark is a CLI; nobody writes
 `import earmark`, and leaving it on would mean importing kokoro-onnx and numpy
 just to build prose. CI therefore never installs earmark at all.
 
+### Two great-docs settings that are not defaults for a reason
+
+`social_cards.image` **must be an absolute URL.** A relative path is copied to
+the build root, which Quarto does not register as a resource, so the file never
+reaches `_site/` and the `og:image` tag 404s. `assets/` *is* a resource
+directory, so the card lives at `assets/social-card.png` and the config names
+its deployed URL. The card itself is the hex logo flattened onto its own cream
+at 1200x630, because the logo is transparent and 1.1 MB; `great-docs.yml`
+carries the ffmpeg line that regenerates it.
+
+`seo.title_template` is `"{page_title}"`, not the default
+`"{page_title} | {site_name}"`. Quarto already appends the site name, so the
+default appends it twice: the landing page renders `earmark | earmark`.
+
 **A new flag or config key must land in `reference/` in the same commit.**
 `tests/test_docs.py` enforces exactly that: every `cli.HANDLERS` entry needs a
 page, every long option needs to appear on it, and every `DEFAULTS` /

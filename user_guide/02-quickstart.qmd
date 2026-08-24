@@ -8,10 +8,16 @@ to. The only decision you have to make first is *where the folder lives*.
 
 ## 1. Make a library
 
-A library is a folder that is **served on the public web**. A pCloud or Dropbox
-public folder, an nginx docroot, a synced WebDAV share, a GitHub Pages repo.
-Anything works, as long as a podcast app can fetch a URL from it without
+A library is a folder that is **served on the public web**. A pCloud public
+folder, a public S3 or R2 bucket, an nginx docroot, a GitHub Pages repo:
+anything works, as long as a podcast app can fetch a URL from it without
 logging in.
+
+Most consumer sync services cannot do this, including Dropbox, Box, Google
+Drive and OneDrive. They hand out one share link per file rather than serving a
+folder, and earmark needs to build episode URLs by appending to a folder. See
+[Where a library can live](07-publishing.qmd#where-a-library-can-live) for what
+works and what to do if your folder is on one of the others.
 
 ```bash
 earmark init ~/pCloud\ Drive/public/audio \
@@ -21,6 +27,15 @@ earmark init ~/pCloud\ Drive/public/audio \
 `--base-url` is the public URL that folder is served at. earmark cannot guess
 it, and publishing needs it, so it is worth getting right now rather than later.
 If you skip it, `earmark config` can set it afterwards.
+
+pCloud mounts as `pCloud Drive` on macOS, and the space in that name has to be
+escaped or quoted every time you type it. If that bothers you, make a symlink
+once and forget about it:
+
+```bash
+ln -s ~/pCloud\ Drive ~/pcloud
+earmark init ~/pcloud/public/audio --base-url https://filedn.com/XXXX/audio
+```
 
 `init` also records this library as your default, so the commands work from
 anywhere on your machine.
