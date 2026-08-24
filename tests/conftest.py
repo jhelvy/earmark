@@ -50,5 +50,18 @@ def tmp_dirs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(paths, "cache_dir", lambda: tmp_path / "cache")
     monkeypatch.setattr(paths, "data_dir", lambda: tmp_path / "data")
-    monkeypatch.setattr(paths, "config_dir", lambda: tmp_path / "config")
+    monkeypatch.setattr(paths, "state_dir", lambda: tmp_path / "state")
+    monkeypatch.setattr(paths, "pointer_path", lambda: tmp_path / "state" / "default")
     return tmp_path
+
+
+@pytest.fixture
+def library(tmp_path):
+    """A ready-to-use library with a base_url, as `earmark init` would leave it."""
+    from earmark import config as config_mod
+    from earmark.library import Library
+
+    lib = Library.at(tmp_path / "library")
+    lib.ensure_dirs()
+    config_mod.init(lib.config_path, base_url="https://example.com/audio", title="Test Feed")
+    return lib

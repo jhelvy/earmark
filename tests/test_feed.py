@@ -5,8 +5,8 @@ import pytest
 
 from earmark import feed as feed_mod
 from earmark.feed import Episode, FeedConfig, FeedState
-from earmark.feedops import Library, parse_size
-from earmark.publish import FolderPublisher, from_config
+from earmark.feedops import Feed, parse_size
+from earmark.publish import Site
 
 ITUNES = "{http://www.itunes.com/dtds/podcast-1.0.dtd}"
 ATOM = "{http://www.w3.org/2005/Atom}"
@@ -81,68 +81,109 @@ def test_parse_size_rejects_nonsense():
 
 
 @pytest.fixture
-def library(tmp_path, state):
-    from earmark import feed as fm
-
-    pub = FolderPublisher(folder=tmp_path / "pub", base_url="https://example.com/em")
-    lib = Library(state=state, publisher=pub, path=tmp_path / "episodes.json")
-    return lib
+def published(tmp_path, state, library):
+    """A Feed over a real library folder, pre-loaded with two episodes."""
+    return Feed(
+        library=library,
+        state=state,
+        site=Site(root=library.root, base_url="https://example.com/em"),
+    )
 
 
 def _fake_mp3(tmp_path, name, size=2048):
     path = tmp_path / name
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"\xff\xfb" + b"0" * size)
     return path
 
 
-def test_orphans_are_detected_and_removable(library, tmp_path):
-    library.publisher.put(_fake_mp3(tmp_path, "stray.mp3"), "audio/stray.mp3")
-    library.publisher.put(_fake_mp3(tmp_path, "a.mp3"), "audio/a.mp3")
-    assert library.orphans() == ["audio/stray.mp3"]
-    assert library.drop_orphans() == ["audio/stray.mp3"]
-    assert library.orphans() == []
+def test_orphans_are_detected_and_removable(published, tmp_path):
+    published.site.put(_fake_mp3(tmp_path, "stray.mp3"), "audio/stray.mp3")
+    published.site.put(_fake_mp3(tmp_path, "a.mp3"), "audio/a.mp3")
+    assert published.orphans() == ["audio/stray.mp3"]
+    assert published.drop_orphans() == ["audio/stray.mp3"]
+    assert published.orphans() == []
 
 
-def test_feed_and_manifest_are_never_orphans(library, tmp_path):
-    library.publish_feed()
-    assert library.orphans() == []
+def test_the_config_and_feed_are_never_orphans(published):
+    published.write()
+    assert published.orphans() == []
 
 
-def test_prune_keeps_the_newest(library, tmp_path):
-    for e in library.state.episodes:
-        library.publisher.put(_fake_mp3(tmp_path, e.filename), e.name)
-    dropped = library.prune(keep=1)
+def test_text_is_never_an_orphan(published):
+    """The Markdown is the editable source, not something the feed points at."""
+    (published.library.text_dir / "note.md").write_text("hi", encoding="utf-8")
+    published.write()
+    assert published.orphans() == []
+
+
+def test_prune_keeps_the_newest(published, tmp_path):
+    for e in published.state.episodes:
+        published.site.put(_fake_mp3(tmp_path, e.filename), e.name)
+    dropped = published.prune(keep=1)
     assert [d.title for d in dropped] == ["First"]
-    assert [e.title for e in library.state.episodes] == ["Second"]
-    assert library.orphans() == []
+    assert [e.title for e in published.state.episodes] == ["Second"]
+    assert published.orphans() == []
 
 
-def test_prune_respects_a_size_budget(library, tmp_path):
-    for e in library.state.episodes:
-        library.publisher.put(_fake_mp3(tmp_path, e.filename), e.name)
-    library.prune(max_bytes=6000)
-    assert [e.title for e in library.state.episodes] == ["Second"]
+def test_prune_respects_a_size_budget(published, tmp_path):
+    for e in published.state.episodes:
+        published.site.put(_fake_mp3(tmp_path, e.filename), e.name)
+    published.prune(max_bytes=6000)
+    assert [e.title for e in published.state.episodes] == ["Second"]
 
 
-def test_republishing_the_same_file_replaces_its_episode(library, tmp_path):
+def test_republishing_the_same_file_replaces_its_episode(published, tmp_path):
     from earmark.extract.meta import Metadata
 
     mp3 = _fake_mp3(tmp_path, "same.mp3")
     meta = Metadata(title="Same", source="https://example.com/a")
-    before = len(library.state.episodes)
-    library.add(mp3, meta, 10.0)
-    library.add(mp3, meta, 10.0)
-    assert len(library.state.episodes) == before + 1
+    before = len(published.state.episodes)
+    published.add(mp3, meta, 10.0)
+    published.add(mp3, meta, 10.0)
+    assert len(published.state.episodes) == before + 1
 
 
-def test_local_paths_never_reach_the_feed(library, tmp_path):
+def test_an_episode_keeps_the_name_convert_gave_it(published, library, tmp_path):
+    """convert writes audio/<slug>.mp3; publish must not rename it."""
+    from earmark.extract.meta import Metadata
+
+    mp3 = _fake_mp3(library.audio_dir, "attention-is-all-you-need.mp3")
+    episode = published.add(mp3, Metadata(title="Attention Is All You Need"), 10.0)
+    assert episode.filename == "attention-is-all-you-need.mp3"
+    assert episode.name == "audio/attention-is-all-you-need.mp3"
+
+
+def test_an_outside_mp3_is_named_from_its_title(published, tmp_path):
+    from earmark.extract.meta import Metadata
+
+    mp3 = _fake_mp3(tmp_path, "recording001.mp3")
+    episode = published.add(mp3, Metadata(title="A Talk I Gave"), 10.0)
+    assert episode.filename == "a-talk-i-gave.mp3"
+    assert (published.library.audio_dir / "a-talk-i-gave.mp3").exists()
+
+
+def test_local_paths_never_reach_the_feed(published, tmp_path):
     from earmark.extract.meta import Metadata
 
     mp3 = _fake_mp3(tmp_path, "local.mp3")
-    episode = library.add(mp3, Metadata(title="Local", source="/Users/me/secret/paper.pdf"), 5.0)
+    episode = published.add(mp3, Metadata(title="Local", source="/Users/me/secret/paper.pdf"), 5.0)
     assert episode.source is None
-    xml = feed_mod.build(library.state, library.publisher.url_for).decode()
+    xml = feed_mod.build(published.state, published.site.url_for).decode()
     assert "/Users/me" not in xml
+
+
+def test_write_runs_the_after_publish_hook(published):
+    published.after_publish = "pwd > ran.txt"
+    published.write()
+    assert (published.library.root / "ran.txt").read_text().strip() == str(published.library.root)
+
+
+def test_write_leaves_feed_xml_in_the_library(published):
+    url = published.write()
+    assert published.library.feed_path.is_file()
+    assert published.library.state_path.is_file()
+    assert url == "https://example.com/em/feed.xml"
 
 
 def test_no_image_elements_when_no_cover_is_set(state):
@@ -161,56 +202,34 @@ def test_cover_appears_in_both_image_spellings(state):
     assert channel.find("image/title").text == state.config.title
 
 
-def test_cover_is_never_an_orphan(library, tmp_path):
+def test_cover_is_never_an_orphan(published, tmp_path):
     from earmark import art
 
-    library.publisher.put(_fake_mp3(tmp_path, "c.jpg"), art.COVER_NAME)
-    library.state.config.image = library.publisher.url_for(art.COVER_NAME)
-    library.publish_feed()
-    assert library.orphans() == []
+    published.site.put(_fake_mp3(tmp_path, "c.jpg"), art.COVER_NAME)
+    published.state.config.image = published.site.url_for(art.COVER_NAME)
+    published.write()
+    assert published.orphans() == []
 
 
-def test_set_cover_publishes_and_points_the_feed_at_it(library, tmp_path):
-    import shutil as _shutil
-
-    if _shutil.which("ffmpeg") is None:
-        pytest.skip("ffmpeg is not installed")
-    from earmark import art
-
-    src = tmp_path / "logo.png"
-    __import__("subprocess").run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-         "-f", "lavfi", "-i", "color=c=blue:s=800x800",
-         "-frames:v", "1", "-pix_fmt", "rgba", str(src)],
-        check=True,
-    )
-    url, detail = library.set_cover(src, size=1400)
-    assert f"/{art.COVER_NAME}?v=" in url
-    assert library.state.config.image == url
-    assert (library.publisher.folder / art.COVER_NAME).exists()
-    assert "1400x1400" in detail
+def test_no_cover_configured_is_not_an_error(published):
+    assert published.refresh_cover() is None
 
 
-def test_a_config_image_still_wins_over_the_published_one(tmp_path):
-    """Setting `image` by hand in [feed] must not be silently overwritten."""
-    lib = Library.open({
-        "publisher": "folder",
-        "folder": str(tmp_path / "pub"),
-        "base_url": "https://example.com/em",
-        "image": "https://cdn.example.com/mine.png",
-    })
-    assert lib.state.config.image == "https://cdn.example.com/mine.png"
+def test_a_missing_cover_file_is_named(published):
+    published.cover = "nope.png"
+    with pytest.raises(FileNotFoundError, match="nope.png"):
+        published.refresh_cover()
 
 
-def test_cover_url_is_cache_busted_by_content(library, tmp_path):
-    """Apps cache artwork by URL, so a changed cover must be a changed URL."""
+@pytest.fixture
+def solid_image(tmp_path):
     import shutil as _shutil
     import subprocess
 
     if _shutil.which("ffmpeg") is None:
         pytest.skip("ffmpeg is not installed")
 
-    def image(name, colour):
+    def make(name, colour):
         path = tmp_path / name
         subprocess.run(
             ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
@@ -220,9 +239,54 @@ def test_cover_url_is_cache_busted_by_content(library, tmp_path):
         )
         return path
 
-    first, _ = library.set_cover(image("a.png", "blue"), size=1400)
-    again, _ = library.set_cover(image("a2.png", "blue"), size=1400)
-    changed, _ = library.set_cover(image("b.png", "green"), size=1400)
+    return make
+
+
+def test_refresh_cover_publishes_and_points_the_feed_at_it(published, solid_image):
+    from earmark import art
+
+    src = solid_image("logo.png", "blue")
+    published.cover = str(src)
+    url, detail = published.refresh_cover()
+    assert f"/{art.COVER_NAME}?v=" in url
+    assert published.state.config.image == url
+    assert (published.library.root / art.COVER_NAME).exists()
+
+
+def test_the_cover_may_be_named_relative_to_the_library(published, solid_image):
+    import shutil
+
+    shutil.copy2(solid_image("logo.png", "blue"), published.library.root / "logo.png")
+    published.cover = "logo.png"
+    url, _ = published.refresh_cover()
+    assert url.startswith("https://example.com/em/cover.jpg?v=")
+
+
+def test_a_config_image_still_wins_over_the_published_one(library):
+    """Setting `image` by hand in [feed] must not be silently overwritten."""
+    from earmark.config import load
+
+    library.config_path.write_text(
+        '[feed]\nbase_url = "https://example.com/em"\n'
+        'cover = "logo.png"\n'
+        'image = "https://cdn.example.com/mine.png"\n',
+        encoding="utf-8",
+    )
+    cfg = load(library.config_path)
+    assert cfg.warnings == []
+    feed = Feed.open(library, cfg)
+    assert feed.state.config.image == "https://cdn.example.com/mine.png"
+    assert feed.refresh_cover() is None
+
+
+def test_cover_url_is_cache_busted_by_content(published, solid_image):
+    """Apps cache artwork by URL, so a changed cover must be a changed URL."""
+    published.cover = str(solid_image("a.png", "blue"))
+    first, _ = published.refresh_cover()
+    published.cover = str(solid_image("a2.png", "blue"))
+    again, _ = published.refresh_cover()
+    published.cover = str(solid_image("b.png", "green"))
+    changed, _ = published.refresh_cover()
     assert "?v=" in first
     assert first == again          # same bytes, same URL: no pointless refetch
     assert changed != first

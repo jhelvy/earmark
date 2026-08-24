@@ -27,19 +27,51 @@ def test_scalars_override_defaults(tmp_path):
     assert cfg.get("lang") == DEFAULTS["lang"]
 
 
-def test_profile_accepted_at_top_level_or_under_clean(tmp_path):
+def test_profile_is_a_top_level_setting(tmp_path):
     assert load(write(tmp_path, 'profile = "paper"\n')).get("profile") == "paper"
-    assert load(write(tmp_path, '[clean]\nprofile = "book"\n')).get("profile") == "book"
 
 
-def test_clean_replace_table(tmp_path):
-    cfg = load(write(tmp_path, '[clean.replace]\nBEV = "battery electric vehicle"\n'))
+def test_replace_table(tmp_path):
+    cfg = load(write(tmp_path, '[replace]\nBEV = "battery electric vehicle"\n'))
     assert cfg.replace == {"BEV": "battery electric vehicle"}
 
 
 def test_feed_section_passed_through(tmp_path):
-    cfg = load(write(tmp_path, '[feed]\npublisher = "folder"\nbase_url = "https://x/y"\n'))
-    assert cfg.feed["publisher"] == "folder"
+    cfg = load(write(tmp_path, '[feed]\nbase_url = "https://x/y"\ntitle = "Pile"\n'))
+    assert cfg.feed["base_url"] == "https://x/y"
+    assert cfg.feed["title"] == "Pile"
+    assert cfg.warnings == []
+
+
+def test_unknown_feed_key_warns_and_is_dropped(tmp_path):
+    """`publisher`, `folder` and `remote` are gone; a config still naming one
+    must say so rather than look like it is being honoured."""
+    cfg = load(write(tmp_path, '[feed]\npublisher = "rclone"\nremote = "r2:bucket"\n'))
+    assert any("feed.publisher" in w for w in cfg.warnings)
+    assert "publisher" not in cfg.feed
+
+
+def test_base_url_must_be_a_url(tmp_path):
+    cfg = load(write(tmp_path, '[feed]\nbase_url = "filedn.com/x"\n'))
+    assert any("base_url" in e for e in cfg.errors)
+
+
+def test_require_base_url_says_how_to_set_it(tmp_path):
+    cfg = load(write(tmp_path, 'voice = "af_heart"\n'))
+    with pytest.raises(ConfigError, match="earmark config"):
+        cfg.require_base_url()
+
+
+def test_require_base_url_trims_a_trailing_slash(tmp_path):
+    cfg = load(write(tmp_path, '[feed]\nbase_url = "https://x/y/"\n'))
+    assert cfg.require_base_url() == "https://x/y"
+
+
+def test_there_is_no_library_key(tmp_path):
+    """The library is the folder the config lives in, never a setting."""
+    assert "library" not in DEFAULTS
+    cfg = load(write(tmp_path, 'library = "/somewhere/else"\n'))
+    assert any("library" in w for w in cfg.warnings)
 
 
 def test_unknown_key_warns_rather_than_vanishing(tmp_path):
@@ -55,9 +87,9 @@ def test_unknown_section_warns(tmp_path):
     assert any("[voices]" in w for w in cfg.warnings)
 
 
-def test_unknown_clean_key_warns(tmp_path):
+def test_replaced_clean_section_warns(tmp_path):
     cfg = load(write(tmp_path, '[clean]\nkeep_tables = true\n'))
-    assert any("clean.keep_tables" in w for w in cfg.warnings)
+    assert any("[clean]" in w for w in cfg.warnings)
 
 
 @pytest.mark.parametrize(
@@ -104,13 +136,14 @@ def test_speed_bool_rejected(tmp_path):
 
 
 def test_replace_must_be_a_table(tmp_path):
-    cfg = load(write(tmp_path, '[clean]\nreplace = "BEV"\n'))
+    cfg = load(write(tmp_path, 'replace = "BEV"\n'))
     assert cfg.replace == {}
     assert cfg.warnings
 
 
 def test_init_writes_a_parsable_template(tmp_path):
-    path, written = config_mod.init(tmp_path / "config.toml")
+    path, written = config_mod.init(tmp_path / "earmark.toml",
+                                    base_url="https://example.com/a")
     assert written
     cfg = load(path)
     assert cfg.errors == [] and cfg.warnings == []
@@ -127,12 +160,19 @@ def test_init_refuses_to_clobber(tmp_path):
     assert load(path).get("voice") == DEFAULTS["voice"]
 
 
+def test_the_template_documents_every_setting(tmp_path):
+    """A key in DEFAULTS that the starter config never mentions is one nobody
+    will find out about."""
+    for key in DEFAULTS:
+        assert key in config_mod.TEMPLATE, f"{key} is a setting the template never shows"
+
+
 def test_no_setting_is_promised_without_being_read():
     """Every key in DEFAULTS must be one a command actually consults; `jobs`
     lived here for a while doing nothing."""
     import earmark.cli as cli
+    import earmark.feedops as feedops
 
-    source = cli.__file__
-    text = open(source, encoding="utf-8").read()
+    text = "".join(open(m.__file__, encoding="utf-8").read() for m in (cli, feedops))
     for key in DEFAULTS:
         assert f'"{key}"' in text, f"{key} is offered in config but never read"

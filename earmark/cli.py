@@ -1,241 +1,191 @@
 """Command line interface.
 
-The ergonomic goal is that ``earmark paper.pdf`` just works, so before argparse
-sees anything we splice in the implicit ``read`` subcommand.
+Seven commands, and three of them are the same pipeline stopped at a different
+point: ``read`` makes the Markdown, ``convert`` makes the MP3, ``publish`` puts
+it on the feed. Everything lands in the library.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from earmark import __version__
 
-SUBCOMMANDS = {"read", "publish", "text", "voices", "models", "cache", "feed", "config"}
-
 EPILOG = """\
 examples:
-  earmark paper.pdf                     -> ./paper.mp3
-  earmark https://example.com/article   -> ./article-title.mp3
+  earmark init ~/pCloud/public/audio --base-url https://filedn.com/XXXX/audio
+  earmark config                        edit this library's settings
+  earmark read paper.pdf                -> text/paper-title.md, to edit by hand
+  earmark convert paper.pdf             -> audio/paper-title.mp3
   earmark publish https://.../article   make it and put it on your feed
-  earmark text paper.pdf                print the cleaned speech text
+  earmark feed                          what is published, and the feed URL
 """
 
 
-def _add_clean_args(p: argparse.ArgumentParser) -> None:
-    g = p.add_argument_group("cleaning")
-    g.add_argument(
-        "--profile",
-        choices=["article", "paper", "book"],
-        default=None,
-        help="preset bundle of cleaning rules (default: article)",
-    )
-    g.add_argument(
-        "--tables",
-        choices=["drop", "describe"],
-        default=None,
-        help="what to do with tables (default: drop)",
-    )
-    g.add_argument("--keep-references", action="store_true", help="don't cut the References section")
-    g.add_argument("--keep-citations", action="store_true", help="don't strip [12] and (Smith et al., 2020)")
-    g.add_argument("--keep-links", action="store_true", help="read URLs aloud (you don't want this)")
-    g.add_argument("--say-code", action="store_true", help="say 'Code block omitted' instead of skipping silently")
-    g.add_argument("--drop-sections", default=None, metavar="LIST", help="comma-separated extra headings to cut")
-    g.add_argument("--skip-front-matter", dest="skip_front_matter", action="store_true", default=None,
-                   help="cut everything before the abstract (default in --profile paper)")
-    g.add_argument("--keep-front-matter", dest="skip_front_matter", action="store_false",
-                   help="narrate the title page, authors and affiliations")
+LIBRARY_HELP = "the library to act on (default: the one you are in)"
+
+
+def _add_library(p: argparse.ArgumentParser, *, default) -> None:
+    """Add ``--library`` so it works on either side of the verb.
+
+    Every parser gets its *own* action rather than sharing one through
+    ``parents=``: a subparser writes its defaults over the namespace the parent
+    already filled in, so a shared action would make
+    ``earmark --library X read f.pdf`` parse fine and then act on the wrong
+    library. The top parser's ``None`` seeds the namespace; each subcommand's
+    ``SUPPRESS`` means "leave it alone unless the flag was actually given".
+    """
+    p.add_argument("--library", default=default, metavar="PATH", help=LIBRARY_HELP)
+
+
+def _sub(sub, name: str, **kw) -> argparse.ArgumentParser:
+    p = sub.add_parser(name, **kw)
+    _add_library(p, default=argparse.SUPPRESS)
+    return p
 
 
 def _add_meta_args(p: argparse.ArgumentParser) -> None:
     g = p.add_argument_group("metadata")
     g.add_argument("--title", default=None, help="override the detected title")
     g.add_argument("--author", default=None, help="override the detected author")
-    g.add_argument("--date", default=None, metavar="YYYY-MM-DD", help="override the detected date")
+    g.add_argument("--date", default=None, help="override the detected date (YYYY-MM-DD)")
+
+
+def _add_clean_args(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("cleaning")
+    g.add_argument("--profile", choices=["article", "paper", "book"], default=None,
+                   help="preset bundle of cleaning rules (default: article)")
+    g.add_argument("--tables", choices=["drop", "describe"], default=None,
+                   help="what to do with tables (default: drop)")
+    g.add_argument("--keep-references", action="store_true", help="don't cut the References section")
+    g.add_argument("--keep-citations", action="store_true",
+                   help="don't strip [12] and (Smith et al., 2020)")
+    g.add_argument("--keep-links", action="store_true", help="read URLs aloud (you don't want this)")
+    g.add_argument("--say-code", action="store_true",
+                   help="say 'Code block omitted' instead of skipping silently")
+    g.add_argument("--drop-sections", default=None, metavar="LIST",
+                   help="comma-separated extra headings to cut")
+    g.add_argument("--skip-front-matter", dest="skip_front_matter", action="store_true", default=None,
+                   help="cut everything before the abstract (default in --profile paper)")
+    g.add_argument("--keep-front-matter", dest="skip_front_matter", action="store_false",
+                   help="narrate the title page, authors and affiliations")
+
+
+def _add_voice_args(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("voice")
+    g.add_argument("-v", "--voice", default=None, help="see `earmark voices` (default: af_heart)")
+    g.add_argument("-s", "--speed", type=float, default=None, help="0.5-2.0 (default: 1.0)")
+    g.add_argument("--lang", default=None, help="language code (default: en-us)")
+    g.add_argument("--model", choices=["full", "fp16", "int8"], default=None,
+                   help="Kokoro model variant (default: full)")
+    g.add_argument("--engine", choices=["kokoro", "say"], default=None,
+                   help="speech backend (default: kokoro)")
+
+
+def _add_audio_args(p: argparse.ArgumentParser) -> None:
+    g = p.add_argument_group("audio")
+    g.add_argument("--bitrate", default=None, help="MP3 bitrate (default: 64k)")
+    g.add_argument("--sample-rate", type=int, default=None, help="output sample rate (default: 44100)")
+    g.add_argument("--no-title-card", dest="title_card", action="store_false",
+                   help="don't speak the title and author first")
+    b = p.add_argument_group("behaviour")
+    b.add_argument("--dry-run", action="store_true",
+                   help="report chunk count and estimated duration, synthesize nothing")
+    b.add_argument("--play", action="store_true", help="open the file when it is done")
+    b.add_argument("-q", "--quiet", action="store_true", help="no progress bar")
+    b.add_argument("--no-cache", dest="use_cache", action="store_false",
+                   help="ignore and don't write the chunk cache")
+    b.add_argument("--refresh", action="store_true",
+                   help="re-extract and re-synthesize, ignoring what is already in the library")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="earmark",
-        description="Turn any document or article into an MP3 you can listen to.",
+        description="Turn documents and articles into a podcast feed of your own.",
         epilog=EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    _add_library(parser, default=None)
     parser.add_argument("--version", action="version", version=f"earmark {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
-    sub.add_parser("publish", help="make an MP3 and add it to your feed (read --publish)",
-                   add_help=False)
+    init = _sub(sub, "init", help="create a library folder")
+    init.add_argument("path", nargs="?", default=None, metavar="PATH",
+                      help="where the library lives (default: the current folder)")
+    init.add_argument("--base-url", default=None,
+                      help="the public URL this folder is served at")
+    init.add_argument("--title", default="earmark", help="podcast title")
+    init.add_argument("--no-default", dest="set_default", action="store_false",
+                      help="don't make this the library used outside any library folder")
+    init.add_argument("--force", action="store_true", help="overwrite an existing earmark.toml")
 
-    read = sub.add_parser("read", help="make an MP3 (the default; 'read' is optional)")
+    cfg = _sub(sub, "config", help="edit this library's settings")
+    cfg.add_argument("--show", action="store_true", help="print the settings in effect and every path")
+    cfg.add_argument("--path", dest="show_path", action="store_true", help="print the config file path")
+
+    read = _sub(sub, "read", help="turn a source into Markdown in the library")
     read.add_argument("source", metavar="SOURCE", help="a file path or a URL")
-    out = read.add_argument_group("output")
-    out.add_argument("-o", "--out", default=None, help="output MP3 (default: ./<title-slug>.mp3)")
-    out.add_argument("--bitrate", default=None, help="MP3 bitrate (default: 64k)")
-    out.add_argument("--sample-rate", type=int, default=None, help="output sample rate (default: 44100)")
-    out.add_argument("--no-title-card", dest="title_card", action="store_false",
-                     help="don't speak the title and author first")
-    voice = read.add_argument_group("voice")
-    voice.add_argument("-v", "--voice", default=None, help="see `earmark voices` (default: af_heart)")
-    voice.add_argument("-s", "--speed", type=float, default=None, help="0.5-2.0 (default: 1.0)")
-    voice.add_argument("--lang", default=None, help="language code (default: en-us)")
-    voice.add_argument("--model", choices=["full", "fp16", "int8"], default=None,
-                       help="Kokoro model variant (default: full)")
-    voice.add_argument("--engine", choices=["kokoro", "say"], default=None,
-                       help="speech backend (default: kokoro)")
+    read.add_argument("--stdout", action="store_true", help="print it instead of writing a file")
+    read.add_argument("--raw", action="store_true", help="the extracted Markdown, before cleaning")
+    read.add_argument("--force", action="store_true", help="overwrite an existing Markdown file")
     _add_meta_args(read)
     _add_clean_args(read)
-    behaviour = read.add_argument_group("behaviour")
-    behaviour.add_argument("--dry-run", action="store_true",
-                           help="report chunk count and estimated duration, synthesize nothing")
-    behaviour.add_argument("--play", action="store_true", help="open the file when it is done")
-    behaviour.add_argument("-q", "--quiet", action="store_true", help="no progress bar")
-    behaviour.add_argument("--no-cache", dest="use_cache", action="store_false",
-                           help="ignore and don't write the chunk cache")
-    behaviour.add_argument("--refresh", action="store_true",
-                           help="re-synthesize everything, then repopulate the cache")
-    out.add_argument("--publish", action="store_true", help="also add the episode to your feed")
-    out.add_argument("--album", default=None, help="ID3 album (default: earmark)")
-    out.add_argument("--cover", default=None, help="cover art JPEG or PNG")
 
-    voices = sub.add_parser("voices", help="list available voices, or hear one")
+    convert = _sub(sub, "convert",
+                   help="turn a source or a Markdown file into an MP3 in the library")
+    convert.add_argument("source", metavar="SOURCE", help="a file path, a Markdown file, or a URL")
+    _add_voice_args(convert)
+    _add_audio_args(convert)
+    _add_meta_args(convert)
+    _add_clean_args(convert)
+
+    pub = _sub(sub, "publish", help="put a source, a Markdown file or an MP3 on your feed")
+    pub.add_argument("source", metavar="SOURCE", help="a file path, a Markdown file, an MP3, or a URL")
+    _add_voice_args(pub)
+    _add_audio_args(pub)
+    _add_meta_args(pub)
+    _add_clean_args(pub)
+
+    feed = _sub(sub, "feed", help="show, rebuild or trim your feed")
+    feed.add_argument("--rebuild", action="store_true",
+                      help="rewrite feed.xml and the cover from the current settings")
+    feed.add_argument("--check", action="store_true", help="prove the published URLs actually serve")
+    feed.add_argument("--prune", action="store_true", help="remove episodes; needs --keep or --max-size")
+    feed.add_argument("--keep", type=int, default=None, metavar="N", help="keep this many newest")
+    feed.add_argument("--max-size", default=None, metavar="SIZE",
+                      help="keep newest episodes under this total, e.g. 800MB")
+    feed.add_argument("--orphans", action="store_true",
+                      help="with --prune, also delete library files the feed no longer lists")
+
+    voices = _sub(sub, "voices", help="list available voices, or hear one")
     voices.add_argument("--engine", choices=["kokoro", "say"], default="kokoro")
     voices.add_argument("--lang", default=None, metavar="CODE",
                         help="only this language, by name prefix: a, b, e, f, h, i, j, p, z")
-    voices.add_argument("--all", action="store_true",
-                        help="include voices Kokoro grades D or worse")
+    voices.add_argument("--all", action="store_true", help="include voices Kokoro grades D or worse")
     voices.add_argument("--try", dest="try_voice", default=None, metavar="VOICE",
                         help="synthesize a sample in this voice and play it")
     voices.add_argument("--text", default=None, help="what --try should say")
     voices.add_argument("-q", "--quiet", action="store_true", help="just the names, one per line")
-
-    models_p = sub.add_parser("models", help="download / locate / remove the Kokoro model files")
-    models_sub = models_p.add_subparsers(dest="action", metavar="ACTION")
-    dl = models_sub.add_parser("download", help="fetch the model files (~354 MB)")
-    dl.add_argument("--model", choices=["full", "fp16", "int8"], default="full")
-    models_sub.add_parser("path", help="print where the model files live")
-    rm = models_sub.add_parser("remove", help="delete downloaded model files")
-    rm.add_argument("--model", choices=["full", "fp16", "int8"], default=None)
-
-    text = sub.add_parser("text", help="print the cleaned speech text and exit")
-    text.add_argument("source", metavar="SOURCE", help="a file path or a URL")
-    text.add_argument("--blocks", action="store_true", help="show block kinds and levels")
-    text.add_argument("--raw", action="store_true", help="print the extracted Markdown, before cleaning")
-    _add_meta_args(text)
-    _add_clean_args(text)
-
-    cache_p = sub.add_parser("cache", help="inspect or clear the synthesis cache")
-    cache_sub = cache_p.add_subparsers(dest="action", metavar="ACTION")
-    cache_sub.add_parser("info", help="entry count and size")
-    clear = cache_sub.add_parser("clear", help="delete cached chunks")
-    clear.add_argument("--older-than", type=float, default=None, metavar="DAYS",
-                       help="only delete entries unused for this many days")
-
-    feed_p = sub.add_parser("feed", help="manage your podcast feed")
-    feed_sub = feed_p.add_subparsers(dest="action", metavar="ACTION")
-    init = feed_sub.add_parser("init", help="write the [feed] section of your config")
-    init.add_argument("--publisher", choices=["folder", "rclone", "command", "github"],
-                      default="folder", help="how files reach the web (default: folder)")
-    init.add_argument("--base-url", required=True, help="the public URL your files appear at")
-    init.add_argument("--title", default="earmark", help="podcast title")
-    init.add_argument("--author", default=None, help="podcast author")
-    init.add_argument("--description", default=None, help="podcast description")
-    init.add_argument("--folder", default=None, help="folder publisher: the directory to copy into")
-    init.add_argument("--remote", default=None, help="rclone publisher: e.g. r2:my-bucket/earmark")
-    # dest must not be "command": that is the top-level subcommand's dest, and a
-    # nested subparser copies its whole namespace over the parent's.
-    init.add_argument("--command", dest="command_template", default=None,
-                      help="command publisher: template using {local} and {name}")
-    init.add_argument("--repo", default=None, help="github publisher: path to the local clone")
-    cover = feed_sub.add_parser("cover", help="set the show artwork your podcast app displays")
-    cover.add_argument("image", nargs="?", default=None,
-                       help="a PNG or JPEG; omit to print the current cover URL")
-    cover.add_argument("--size", type=int, default=None, metavar="PX",
-                       help="square size to produce (default: 3000)")
-    cover.add_argument("--background", default=None, metavar="COLOR",
-                       help="what to flatten transparency onto (default: white)")
-    feed_sub.add_parser("list", help="show published episodes")
-    feed_sub.add_parser("rebuild", help="regenerate and re-upload feed.xml")
-    feed_sub.add_parser("url", help="print the feed URL to paste into your podcast app")
-    feed_sub.add_parser("doctor", help="check that the published URLs actually serve")
-    prune = feed_sub.add_parser("prune", help="remove old episodes")
-    prune.add_argument("--keep", type=int, default=None, help="keep this many newest episodes")
-    prune.add_argument("--max-size", default=None, metavar="SIZE",
-                       help="keep newest episodes under this total, e.g. 800MB")
-    prune.add_argument("--orphans", action="store_true",
-                       help="also delete published files the feed no longer lists")
-
-    config_p = sub.add_parser("config", help="show, create or edit your config file")
-    config_sub = config_p.add_subparsers(dest="action", metavar="ACTION")
-    config_sub.add_parser("path", help="print the config file path (the default)")
-    cfg_init = config_sub.add_parser("init", help="write a commented starter config")
-    cfg_init.add_argument("--force", action="store_true", help="overwrite an existing file")
-    config_sub.add_parser("edit", help="open the config in $EDITOR")
-    config_sub.add_parser("show", help="print the settings in effect, and any problems")
     return parser
 
 
-def _clean_options(args, cfg=None):
-    from earmark import config as config_mod
-    from earmark.clean import options_for
-
-    cfg = cfg if cfg is not None else _load_config()
-    profile = args.profile or cfg.get("profile")
-    drop_sections = tuple(
-        s.strip().lower() for s in (args.drop_sections or "").split(",") if s.strip()
-    )
-    return options_for(
-        profile,
-        tables=args.tables,
-        drop_references=False if args.keep_references else None,
-        drop_citations=False if args.keep_citations else None,
-        drop_author_year=False if args.keep_citations else None,
-        drop_links=False if args.keep_links else None,
-        say_code=True if args.say_code else None,
-        drop_sections=drop_sections or None,
-        skip_front_matter=args.skip_front_matter,
-        replace=cfg.replace or None,
-    )
+# ---------------------------------------------------------------- helpers
 
 
-def cmd_text(args) -> int:
-    from earmark.clean import clean, render
-    from earmark.extract import extract
+def _open_library(args, *, must_exist: bool = True):
+    """Resolve the library and load its config, reporting any problems."""
+    from earmark.config import load
+    from earmark.library import Library
 
-    cfg = _load_config()
-    doc = extract(args.source, title=args.title, author=args.author, date=args.date)
-    if args.raw:
-        print(doc.markdown)
-        return 0
-
-    blocks = clean(doc.markdown, _clean_options(args, cfg))
-    header = f"# {doc.meta.title}"
-    if doc.meta.author:
-        header += f"\n# by {doc.meta.author}"
-    print(header + "\n", file=sys.stderr)
-
-    if args.blocks:
-        for b in blocks:
-            tag = f"{b.kind}{b.level or ''}"
-            print(f"[{tag:<8}] {b.text}")
-    else:
-        print(render(blocks))
-    return 0
-
-
-def _load_config():
-    """Load the config, report any problems, and refuse to run on a bad value.
-
-    A setting that is silently ignored is the worst outcome: the user edits the
-    file, nothing changes, and there is nothing to read. Typos warn; values that
-    cannot be used stop the run and name themselves.
-    """
-    from earmark import config as config_mod
-
-    cfg = config_mod.load()
-    _report_config(cfg)
+    lib = Library.resolve(args.library, must_exist=must_exist)
+    cfg = load(lib.config_path)
+    for warning in cfg.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     cfg.check()
-    return cfg
+    return lib, cfg
 
 
 def _setting(args, cfg, name, default=None):
@@ -243,83 +193,449 @@ def _setting(args, cfg, name, default=None):
     return value if value is not None else cfg.get(name, default)
 
 
-def cmd_read(args) -> int:
-    from pathlib import Path
+def _clean_options(args, cfg):
+    from earmark.clean import options_for
 
-    from earmark import audio, config as config_mod, pipeline
-    from earmark.audio import format_duration
-    from earmark.chunk import estimated_seconds
-    from earmark.source import default_output
+    drop = tuple(
+        s.strip().lower() for s in (getattr(args, "drop_sections", None) or "").split(",") if s.strip()
+    )
+    return options_for(
+        args.profile or cfg.get("profile"),
+        tables=args.tables,
+        drop_references=False if args.keep_references else None,
+        drop_citations=False if args.keep_citations else None,
+        drop_author_year=False if args.keep_citations else None,
+        drop_links=False if args.keep_links else None,
+        say_code=True if args.say_code else None,
+        drop_sections=drop or None,
+        skip_front_matter=args.skip_front_matter,
+        replace=cfg.replace or None,
+    )
+
+
+def _backend(args, cfg):
+    """Build the speech backend, downloading the model if it is not here yet."""
+    from earmark import models
     from earmark.tts import get_backend
 
-    cfg = _load_config()
-    opts = _clean_options(args, cfg)
-    meta_kw = dict(title=args.title, author=args.author, date=args.date)
+    engine = _setting(args, cfg, "engine", "kokoro")
+    variant = _setting(args, cfg, "model", "full")
+    if engine == "kokoro" and not models.is_downloaded(variant):
+        _download_model(variant)
+    return get_backend(engine, variant=variant)
 
-    if args.dry_run:
-        chunks, meta, seconds = pipeline.dry_run(
-            args.source, opts, title_card=args.title_card, **meta_kw
-        )
-        chars = sum(len(c.text) for c in chunks)
-        print(f"{meta.title}")
-        if meta.author:
-            print(f"by {meta.author}")
-        print(f"{len(chunks)} chunks, {chars:,} characters, about {format_duration(seconds)}")
+
+def _download_model(variant: str) -> None:
+    """Confirm and fetch the Kokoro files. They are large and this is the once."""
+    from earmark import models
+
+    size = "354 MB" if variant == "full" else "about 100 MB"
+    if sys.stdin.isatty() and sys.stderr.isatty():
+        print(f"The Kokoro {variant} model is not downloaded yet ({size}).", file=sys.stderr)
+        answer = input("Download it now? [Y/n] ").strip().lower()
+        if answer and not answer.startswith("y"):
+            raise RuntimeError("cannot synthesize without the model")
+    else:
+        print(f"downloading the Kokoro {variant} model ({size})...", file=sys.stderr)
+
+    from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TransferSpeedColumn
+
+    with Progress(
+        TextColumn("[bold]{task.description}"), BarColumn(), DownloadColumn(), TransferSpeedColumn()
+    ) as bar:
+        def make(name, total, done):
+            task = bar.add_task(name, total=total, completed=done)
+            return lambda n: bar.update(task, advance=n)
+
+        models.ensure(variant, progress=make)
+
+
+def _load_document(args, cfg, lib):
+    from earmark import pipeline
+
+    return pipeline.load(
+        args.source,
+        _clean_options(args, cfg),
+        title=args.title,
+        author=args.author,
+        date=args.date,
+    )
+
+
+def _slug_for(meta, source: str) -> str:
+    from earmark.source import slugify
+
+    return slugify(meta.title) if meta.title and meta.title != "Untitled" else slugify(Path(source).stem)
+
+
+def _is_audio(source: str) -> bool:
+    from earmark.source import is_url
+
+    return not is_url(source) and Path(source).suffix.lower() in {".mp3", ".m4a", ".wav"}
+
+
+# ---------------------------------------------------------------- commands
+
+
+def cmd_init(args) -> int:
+    from earmark import config as config_mod
+    from earmark.library import Library, write_default
+
+    root = Path(args.path).expanduser() if args.path else Path.cwd()
+    lib = Library.at(root)
+    lib.ensure_dirs()
+    path, written = config_mod.init(
+        lib.config_path, base_url=args.base_url or "", title=args.title, force=args.force
+    )
+    if not written:
+        print(f"{path} already exists; --force to overwrite", file=sys.stderr)
+        return 1
+
+    print(f"library: {lib.root}")
+    print(f"  {config_mod.TEMPLATE.splitlines()[0].lstrip('# ')}: {path}")
+    if args.set_default:
+        write_default(lib.root)
+        print("  set as your default library")
+    if not args.base_url:
+        print("\nNo base_url yet. Publishing needs the public URL this folder is served at:")
+        print("  earmark config")
+    return 0
+
+
+def cmd_config(args) -> int:
+    import os
+    import subprocess
+
+    from earmark import config as config_mod
+    from earmark.library import Library
+
+    lib = Library.resolve(args.library, must_exist=not args.show_path)
+    if args.show_path:
+        print(lib.config_path)
         return 0
 
-    audio.require_ffmpeg()
-    engine = _setting(args, cfg, "engine", "kokoro")
-    backend = get_backend(engine, variant=_setting(args, cfg, "model", "full"))
-    voice = _setting(args, cfg, "voice", "af_heart")
-    speed = float(_setting(args, cfg, "speed", 1.0))
+    if args.show:
+        from earmark import paths
 
-    out_path = Path(args.out) if args.out else None
-    progress = _Progress(quiet=args.quiet)
+        cfg = config_mod.load(lib.config_path)
+        print(f"library      {lib.root}")
+        print(f"config       {lib.config_path}")
+        print(f"text         {lib.text_dir}")
+        print(f"feed         {lib.feed_path}")
+        print(f"episodes     {lib.state_path}")
+        print(f"models       {paths.models_dir()}")
+        print(f"cache        {paths.chunk_cache_dir()}")
+        print()
+        for key, fallback in config_mod.DEFAULTS.items():
+            value = cfg.get(key)
+            origin = "config" if cfg.values.get(key) != fallback else "default"
+            print(f"{key:<14} {value!r:<14} ({origin})")
+        if cfg.feed:
+            print()
+            for key in config_mod.FEED_KEYS:
+                if cfg.feed.get(key):
+                    print(f"feed.{key:<9} {cfg.feed[key]!r}")
+        if cfg.replace:
+            print(f"\n[replace] {len(cfg.replace)} replacement(s)")
+            for k, v in sorted(cfg.replace.items()):
+                print(f"  {k} -> {v}")
+        for warning in cfg.warnings:
+            print(f"warning: {warning}", file=sys.stderr)
+        for error in cfg.errors:
+            print(f"error: {error}", file=sys.stderr)
+        return 1 if cfg.errors else 0
+
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "nano"
+    return subprocess.run([*editor.split(), str(lib.config_path)], check=False).returncode
+
+
+def cmd_read(args) -> int:
+    from earmark import pipeline
+    from earmark.extract import extract
+
+    lib, cfg = _open_library(args)
+
+    if args.raw:
+        doc = extract(args.source, title=args.title, author=args.author, date=args.date)
+        print(doc.markdown)
+        return 0
+
+    doc = _load_document(args, cfg, lib)
+    if args.stdout:
+        print(doc.text)
+        return 0
+
+    out = lib.markdown_path(_slug_for(doc.meta, args.source))
+    if out.exists() and not args.force and not doc.reused:
+        print(f"{out} already exists; --force to overwrite", file=sys.stderr)
+        return 1
+    pipeline.write_markdown(doc, out)
+    words = len(doc.text.split())
+    print(f"{out}  ({words:,} words)")
+    return 0
+
+
+def _convert(args, cfg, lib, *, quiet: bool = False):
+    """Produce (or reuse) the MP3 for a source. Shared by convert and publish."""
+    from earmark import audio, cache, pipeline
+    from earmark.audio import format_duration
+
+    doc = _load_document(args, cfg, lib)
+    slug = _slug_for(doc.meta, args.source)
+    out_path = lib.audio_path(slug)
+
+    if args.dry_run:
+        chunks, seconds = pipeline.estimate(doc, source=args.source, title_card=args.title_card)
+        chars = sum(len(c.text) for c in chunks)
+        print(doc.meta.title)
+        if doc.meta.author:
+            print(f"by {doc.meta.author}")
+        print(f"{len(chunks)} chunks, {chars:,} characters, about {format_duration(seconds)}")
+        print(f"-> {out_path}")
+        return None, doc
+
+    # Keep the Markdown beside the audio, so the next run can reuse or you can edit it.
+    md_path = lib.markdown_path(slug)
+    if not doc.reused and (args.refresh or not md_path.exists()):
+        pipeline.write_markdown(doc, md_path)
+
+    audio.require_ffmpeg()
+    backend = _backend(args, cfg)
+    progress = _Progress(quiet=quiet or args.quiet)
 
     def on_start(chunks, meta):
-        nonlocal out_path
-        if out_path is None:
-            out_path = default_output(meta.title, args.source, cfg.get("output_dir"))
+        from earmark.chunk import estimated_seconds
+
         progress.start(chunks, meta, out_path, estimated_seconds(chunks))
 
     with progress:
-        result = pipeline.render(
-            args.source,
-            out_path or Path("earmark-output.mp3"),
-            opts,
+        result = pipeline.render_audio(
+            doc,
+            out_path,
             backend,
-            voice=voice,
-            speed=speed,
+            source=args.source,
+            voice=_setting(args, cfg, "voice", "af_heart"),
+            speed=float(_setting(args, cfg, "speed", 1.0)),
             lang=_setting(args, cfg, "lang", "en-us"),
             bitrate=_setting(args, cfg, "bitrate", audio.DEFAULT_BITRATE),
             sample_rate=int(_setting(args, cfg, "sample_rate", audio.DEFAULT_SAMPLE_RATE)),
+            title_card=args.title_card,
             on_start=on_start,
             on_chunk=progress.advance,
             use_cache=args.use_cache,
             refresh=args.refresh,
-            album=args.album,
-            cover=Path(args.cover) if args.cover else None,
-            **meta_kw,
+            album=cfg.feed.get("title") or "earmark",
+            cover=_cover_path(lib, cfg),
         )
+    if args.use_cache:
+        cache.autoprune()
+    return result, doc
 
+
+def _cover_path(lib, cfg) -> Path | None:
+    name = cfg.feed.get("cover")
+    if not name:
+        return None
+    path = Path(name).expanduser()
+    if not path.is_absolute():
+        path = lib.root / path
+    return path if path.is_file() else None
+
+
+def cmd_convert(args) -> int:
+    from earmark.audio import format_duration
+
+    lib, cfg = _open_library(args)
+    result, _ = _convert(args, cfg, lib)
+    if result is None:
+        return 0
     size_mb = result.path.stat().st_size / 1e6
     print(f"{result.path}  ({format_duration(result.seconds)}, {size_mb:.1f} MB)")
-
-    if args.publish:
-        from earmark.feedops import Library
-
-        library = Library.open(cfg.feed)
-        episode = library.add(
-            result.path, result.meta, result.seconds, description=result.excerpt
-        )
-        url = library.publish_feed()
-        library.save()
-        print(f"published {episode.filename}")
-        print(f"feed: {url}")
     if args.play:
         import subprocess
 
         subprocess.run(["open", str(result.path)], check=False)
+    return 0
+
+
+def cmd_publish(args) -> int:
+    from earmark.audio import format_duration
+    from earmark.feedops import Feed
+
+    lib, cfg = _open_library(args)
+    cfg.require_base_url()
+
+    if _is_audio(args.source):
+        mp3, meta, seconds, description = _adopt_audio(args, lib)
+    else:
+        result, _ = _convert(args, cfg, lib)
+        if result is None:
+            return 0
+        mp3, meta = result.path, result.meta
+        seconds, description = result.seconds, result.excerpt
+        size_mb = mp3.stat().st_size / 1e6
+        print(f"{mp3}  ({format_duration(seconds)}, {size_mb:.1f} MB)")
+
+    feed = Feed.open(lib, cfg)
+    cover = feed.refresh_cover()
+    episode = feed.add(mp3, meta, seconds, description=description)
+    url = feed.write()
+    print(f"published {episode.filename}")
+    if cover:
+        print(f"cover     {cover[1]}")
+    print(f"feed      {url}")
+    return 0
+
+
+def _adopt_audio(args, lib):
+    """Take an MP3 that already exists onto the feed, with no synthesis."""
+    from earmark import audio, tag
+    from earmark.extract.meta import Metadata
+
+    path = Path(args.source).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(f"no such file: {path}")
+    existing = tag.summary(path)
+    meta = Metadata(
+        title=args.title or existing.get("title") or path.stem.replace("-", " "),
+        author=args.author or existing.get("author"),
+        date=args.date or existing.get("date"),
+        source=str(path),
+    )
+    seconds = audio.probe_duration(path)
+    return path, meta, seconds, ""
+
+
+def cmd_feed(args) -> int:
+    from earmark.audio import format_duration
+    from earmark.feedops import Feed, parse_size
+
+    lib, cfg = _open_library(args)
+    feed = Feed.open(lib, cfg)
+
+    if args.prune:
+        if args.keep is None and args.max_size is None and not args.orphans:
+            raise ValueError("--prune needs --keep, --max-size or --orphans")
+        dropped = feed.prune(args.keep, parse_size(args.max_size) if args.max_size else None)
+        for episode in dropped:
+            print(f"removed {episode.filename}")
+        if args.orphans:
+            for name in feed.drop_orphans():
+                print(f"removed orphan {name}")
+        feed.refresh_cover()
+        print(f"feed      {feed.write()}")
+        return 0
+
+    if args.rebuild:
+        cover = feed.refresh_cover()
+        if cover:
+            print(f"cover     {cover[1]}")
+        print(f"feed      {feed.write()}")
+        return 0
+
+    if args.check:
+        failures = 0
+        for url, ok, detail in feed.check():
+            print(f"{'ok  ' if ok else 'FAIL'}  {url}  ({detail})")
+            failures += not ok
+        orphans = feed.orphans()
+        if orphans:
+            print(f"\n{len(orphans)} file(s) the feed no longer lists:")
+            for name in orphans[:10]:
+                print(f"  {name}")
+            print("Remove them with:  earmark feed --prune --orphans")
+        if failures:
+            print(
+                "\nSomething published is not reachable. Check that base_url points at the "
+                "same place this folder is served from, and that the files are public.",
+                file=sys.stderr,
+            )
+        return 1 if failures else 0
+
+    episodes = sorted(feed.state.episodes, key=lambda e: e.published, reverse=True)
+    if not episodes:
+        print("nothing published yet.  earmark publish paper.pdf")
+    for episode in episodes:
+        print(f"{episode.published}  {format_duration(episode.seconds):>8}  "
+              f"{episode.bytes / 1e6:6.1f} MB  {episode.title}")
+    if episodes:
+        print(f"\n{len(episodes)} episode(s), {feed.total_bytes() / 1e6:.0f} MB total")
+    print(f"feed      {feed.url}")
+    return 0
+
+
+# Kokoro's own grades run A to F+; below this the voice is a curiosity, not a
+# thing to listen to a paper in.
+POOR_GRADES = {"D+", "D", "D-", "F+", "F"}
+
+
+def cmd_voices(args) -> int:
+    from earmark.tts import catalog
+
+    class _Args:
+        engine = args.engine
+        model = "full"
+
+    class _Cfg:
+        def get(self, key, default=None):
+            return default
+
+    backend = _backend(_Args(), _Cfg())
+    available = backend.voices()
+
+    if args.try_voice:
+        return _try_voice(backend, args.try_voice, available, args.text)
+
+    if args.lang:
+        available = [v for v in available if v.startswith(args.lang.lower()[:1])]
+        if not available:
+            raise ValueError(f"no voices for language prefix {args.lang!r}")
+
+    if args.quiet:
+        for voice in sorted(available, key=catalog.sort_key):
+            print(voice)
+        return 0
+
+    hidden = 0
+    for language, voices in catalog.group(available).items():
+        shown = [v for v in voices if args.all or catalog.grade_of(v) not in POOR_GRADES]
+        hidden += len(voices) - len(shown)
+        if not shown:
+            continue
+        print(f"\n{language}")
+        for voice in shown:
+            grade = catalog.grade_of(voice) or "-"
+            marks = " (default)" if voice == catalog.DEFAULT_VOICE else ""
+            print(f"  {voice:<16}{grade:<4}{catalog.gender_of(voice)}{marks}".rstrip())
+
+    if hidden:
+        print(f"\n{hidden} more graded D or worse; --all to see them")
+    print("\nGrades are Kokoro's own. Hear one:  earmark voices --try af_bella")
+    return 0
+
+
+def _try_voice(backend, voice: str, available: list[str], text: str | None) -> int:
+    """Synthesize a few seconds in one voice and play it.
+
+    Reading the grade table tells you less than three seconds of your own text
+    does, and the model is already on disk.
+    """
+    import subprocess
+    import tempfile
+
+    from earmark import audio
+    from earmark.tts import catalog
+
+    if voice not in available:
+        raise ValueError(f"unknown voice {voice!r}; see: earmark voices")
+    audio.require_ffmpeg()
+
+    said = text or catalog.SAMPLE_TEXT
+    out = Path(tempfile.gettempdir()) / f"earmark-sample-{voice}.mp3"
+    samples = backend.synth(said, voice=voice, speed=1.0, lang="en-us")
+    audio.encode(iter([samples]), out, input_rate=backend.sample_rate)
+    print(f"{voice}  {catalog.grade_of(voice) or '-'}  -> {out}")
+    subprocess.run(["open", str(out)], check=False)
     return 0
 
 
@@ -342,10 +658,8 @@ class _Progress:
         print(f"{meta.title}", file=sys.stderr)
         if meta.author:
             print(f"by {meta.author}", file=sys.stderr)
-        print(
-            f"{len(chunks)} chunks, about {format_duration(estimate)} -> {out_path}",
-            file=sys.stderr,
-        )
+        print(f"{len(chunks)} chunks, about {format_duration(estimate)} -> {out_path}",
+              file=sys.stderr)
         import time
 
         from rich.progress import (
@@ -387,368 +701,19 @@ class _Progress:
         return False
 
 
-# Kokoro's own grades run A to F+; below this the voice is a curiosity, not a
-# thing to listen to a paper in.
-POOR_GRADES = {"D+", "D", "D-", "F+", "F"}
-
-
-def cmd_voices(args) -> int:
-    from earmark.tts import catalog, get_backend
-
-    backend = get_backend(args.engine)
-    available = backend.voices()
-
-    if args.try_voice:
-        return _try_voice(backend, args.try_voice, available, args.text)
-
-    if args.lang:
-        available = [v for v in available if v.startswith(args.lang.lower()[:1])]
-        if not available:
-            raise ValueError(f"no voices for language prefix {args.lang!r}")
-
-    if args.quiet:
-        for voice in sorted(available, key=catalog.sort_key):
-            print(voice)
-        return 0
-
-    hidden = 0
-    for language, voices in catalog.group(available).items():
-        shown = [v for v in voices if args.all or catalog.grade_of(v) not in POOR_GRADES]
-        hidden += len(voices) - len(shown)
-        if not shown:
-            continue
-        print(f"\n{language}")
-        for voice in shown:
-            grade = catalog.grade_of(voice) or "-"
-            marks = " (default)" if voice == catalog.DEFAULT_VOICE else ""
-            row = f"  {voice:<16}{grade:<4}{catalog.gender_of(voice)}{marks}"
-            print(row.rstrip())
-
-    if hidden:
-        print(f"\n{hidden} more graded D or worse; --all to see them")
-    print("\nGrades are Kokoro's own. Hear one:  earmark voices --try af_bella")
-    return 0
-
-
-def _try_voice(backend, voice: str, available: list[str], text: str | None) -> int:
-    """Synthesize a few seconds in one voice and play it.
-
-    Reading the grade table tells you less than three seconds of your own text
-    does, and the model is already on disk.
-    """
-    import subprocess
-    import tempfile
-    from pathlib import Path
-
-    from earmark import audio
-    from earmark.tts import catalog
-
-    if voice not in available:
-        raise ValueError(f"unknown voice {voice!r}; see: earmark voices")
-    audio.require_ffmpeg()
-
-    said = text or catalog.SAMPLE_TEXT
-    out = Path(tempfile.gettempdir()) / f"earmark-sample-{voice}.mp3"
-    samples = backend.synth(said, voice=voice, speed=1.0, lang="en-us")
-    audio.encode(iter([samples]), out, input_rate=backend.sample_rate)
-    print(f"{voice}  {catalog.grade_of(voice) or '-'}  -> {out}")
-    subprocess.run(["open", str(out)], check=False)
-    return 0
-
-
-def cmd_models(args) -> int:
-    from earmark import models
-    from earmark.paths import models_dir
-
-    action = getattr(args, "action", None) or "path"
-    if action == "path":
-        print(models_dir())
-        for variant in models.MODELS:
-            path = models.model_path(variant)
-            if path.exists():
-                print(f"  {path.name}  {path.stat().st_size / 1e6:.0f} MB")
-        voices = models.voices_path()
-        if voices.exists():
-            print(f"  {voices.name}  {voices.stat().st_size / 1e6:.0f} MB")
-        return 0
-    if action == "remove":
-        removed = models.remove(args.model)
-        for path in removed:
-            print(f"removed {path}")
-        if not removed:
-            print("nothing to remove")
-        return 0
-
-    from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TransferSpeedColumn
-
-    with Progress(
-        TextColumn("[bold]{task.description}"), BarColumn(), DownloadColumn(), TransferSpeedColumn()
-    ) as bar:
-        def make(name, total, done):
-            task = bar.add_task(name, total=total, completed=done)
-            return lambda n: bar.update(task, advance=n)
-
-        model, voices = models.ensure(args.model, progress=make)
-    print(f"{model}\n{voices}")
-    return 0
-
-
-def cmd_config(args) -> int:
-    import os
-    import subprocess
-
-    from earmark import config as config_mod
-    from earmark.paths import config_path
-
-    action = getattr(args, "action", None) or "path"
-    path = config_path()
-
-    if action == "init":
-        path, written = config_mod.init(path, force=args.force)
-        if not written:
-            print(f"{path} already exists; use --force to overwrite", file=sys.stderr)
-            return 1
-        print(f"wrote {path}")
-        return 0
-
-    if action == "edit":
-        if not path.exists():
-            config_mod.init(path)
-            print(f"created {path}", file=sys.stderr)
-        editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "nano"
-        return subprocess.run([*editor.split(), str(path)], check=False).returncode
-
-    if action == "show":
-        cfg = config_mod.load(path)
-        if not path.exists():
-            print(f"{path} does not exist; these are the built-in defaults", file=sys.stderr)
-        for key in config_mod.DEFAULTS:
-            value = cfg.get(key)
-            source = "config" if cfg.values.get(key) != config_mod.DEFAULTS[key] else "default"
-            print(f"{key:<12} {value!r:<12} ({source})")
-        if cfg.replace:
-            print(f"\n[clean.replace] {len(cfg.replace)} replacement(s)")
-            for k, v in sorted(cfg.replace.items()):
-                print(f"  {k} -> {v}")
-        if cfg.feed:
-            print(f"\n[feed] publisher = {cfg.feed.get('publisher', 'folder')!r}")
-        _report_config(cfg)
-        for error in cfg.errors:
-            print(f"error: {error}", file=sys.stderr)
-        return 1 if cfg.errors else 0
-
-    print(path)
-    if not path.exists():
-        print("(does not exist yet; run `earmark config init`)", file=sys.stderr)
-    return 0
-
-
-def _report_config(cfg) -> None:
-    """Print config warnings. Errors are left to `check`, which raises them."""
-    for warning in cfg.warnings:
-        print(f"warning: {warning}", file=sys.stderr)
-
-
-def cmd_cache(args) -> int:
-    from earmark import cache
-    from earmark.paths import cache_dir
-
-    action = getattr(args, "action", None) or "info"
-    if action == "clear":
-        removed, freed = cache.clear(args.older_than)
-        print(f"removed {removed} entries, freed {freed / 1e6:.1f} MB")
-        return 0
-    stats = cache.info()
-    print(cache_dir())
-    print(f"{stats['count']} chunks, {stats['bytes'] / 1e6:.1f} MB")
-    return 0
-
-
-# config key -> argparse dest
-FEED_INIT_KEYS = {
-    "folder": "folder",
-    "remote": "remote",
-    "command": "command_template",
-    "repo": "repo",
-}
-
-
-def cmd_feed(args) -> int:
-    import tomllib
-    from pathlib import Path
-
-    from earmark import config as config_mod
-    from earmark.feedops import Library, parse_size
-    from earmark.paths import config_path
-
-    action = getattr(args, "action", None) or "url"
-
-    if action == "init":
-        required = {"folder": "folder", "rclone": "remote", "command": "command", "github": "repo"}
-        need = required[args.publisher]
-        if not getattr(args, FEED_INIT_KEYS[need], None):
-            raise ValueError(f"--{need} is required for the {args.publisher!r} publisher")
-        lines = [
-            "[feed]",
-            f'publisher = "{args.publisher}"',
-            f'base_url = "{args.base_url.rstrip("/")}"',
-            f'title = "{args.title}"',
-        ]
-        if args.author:
-            lines.append(f'author = "{args.author}"')
-        if args.description:
-            lines.append(f'description = "{args.description}"')
-        for key, dest in FEED_INIT_KEYS.items():
-            value = getattr(args, dest, None)
-            if value:
-                lines.append(f'{key} = "{value}"')
-        block = "\n".join(lines) + "\n"
-
-        path = config_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        existing = path.read_text(encoding="utf-8") if path.exists() else ""
-        # Parse rather than search for "[feed]": the starter config written by
-        # `earmark config init` carries a commented-out [feed] example, and a
-        # substring test would treat that as an existing section forever.
-        try:
-            already = bool(tomllib.loads(existing).get("feed"))
-        except tomllib.TOMLDecodeError:
-            already = False
-        if already:
-            print(f"a [feed] section already exists in {path}; edit it directly:\n\n{block}")
-            return 1
-        with path.open("a", encoding="utf-8") as fh:
-            if existing and not existing.endswith("\n"):
-                fh.write("\n")
-            fh.write("\n" + block)
-        print(f"wrote [feed] to {path}")
-        print(f"feed URL: {args.base_url.rstrip('/')}/feed.xml")
-        print("Publish something with:  earmark <source> --publish")
-        return 0
-
-    cfg = _load_config()
-    if not cfg.feed:
-        raise RuntimeError("no [feed] configured; run: earmark feed init --help")
-    library = Library.open(cfg.feed)
-
-    if action == "url":
-        print(library.url)
-        return 0
-    if action == "cover":
-        if not args.image:
-            current = library.state.config.image
-            print(current or "no cover set; add one with: earmark feed cover IMAGE")
-            return 0 if current else 1
-        from earmark import art
-
-        source = Path(args.image).expanduser()
-        dims = art.dimensions(source)
-        if dims and dims[0] != dims[1]:
-            print(f"note: {source.name} is {dims[0]}x{dims[1]}; it will be padded to a "
-                  f"square rather than cropped")
-        url, detail = library.set_cover(
-            source, size=args.size, background=args.background
-        )
-        library.publish_feed()
-        library.save()
-        print(f"cover published ({detail})\n{url}")
-        print("Podcast apps cache artwork; it can take a while to appear.")
-        return 0
-    if action == "list":
-        episodes = sorted(library.state.episodes, key=lambda e: e.published, reverse=True)
-        if not episodes:
-            print("no episodes published yet")
-            return 0
-        from earmark.audio import format_duration
-
-        for e in episodes:
-            print(f"{e.published}  {format_duration(e.seconds):>8}  {e.bytes / 1e6:6.1f} MB  {e.title}")
-        total = sum(e.seconds for e in episodes)
-        print(
-            f"\n{len(episodes)} episode{'s' if len(episodes) != 1 else ''}, "
-            f"{format_duration(total)}, {library.total_bytes() / 1e6:.1f} MB"
-        )
-        return 0
-    if action == "rebuild":
-        print(library.publish_feed())
-        library.save()
-        return 0
-    if action == "prune":
-        from earmark.audio import format_duration
-
-        max_bytes = parse_size(args.max_size) if args.max_size else None
-        if args.keep is None and max_bytes is None and not args.orphans:
-            raise ValueError("give --keep, --max-size or --orphans")
-        if args.keep is not None or max_bytes is not None:
-            for e in library.prune(keep=args.keep, max_bytes=max_bytes):
-                print(f"removed {e.filename}")
-        if args.orphans:
-            for name in library.drop_orphans():
-                print(f"removed orphan {name}")
-        library.publish_feed()
-        library.save()
-        remaining = library.state.episodes
-        total = sum(e.seconds for e in remaining)
-        print(
-            f"{len(remaining)} episode{'s' if len(remaining) != 1 else ''} "
-            f"{'remain' if len(remaining) != 1 else 'remains'}, "
-            f"{format_duration(total)}, {library.total_bytes() / 1e6:.1f} MB"
-        )
-        return 0
-    if action == "doctor":
-        failures = 0
-        for url, ok, detail in library.check():
-            print(f"{'ok  ' if ok else 'FAIL'}  {url}  ({detail})")
-            failures += not ok
-        orphans = library.orphans()
-        if orphans:
-            print(f"\n{len(orphans)} published file(s) the feed no longer lists:")
-            for name in orphans[:10]:
-                print(f"  {name}")
-            print("Remove them with:  earmark feed prune --orphans")
-        elif orphans is None:
-            print("\n(this publisher cannot list what it holds, so orphans can't be checked)")
-        if failures:
-            print(
-                "\nSomething published is not reachable. Check that base_url points at the "
-                "same place your publisher writes to, and that the files are public.",
-                file=sys.stderr,
-            )
-        return 1 if failures else 0
-    raise ValueError(f"unknown feed action {action!r}")
-
-
 HANDLERS = {
-    "text": cmd_text,
-    "read": cmd_read,
+    "init": cmd_init,
     "config": cmd_config,
-    "voices": cmd_voices,
-    "models": cmd_models,
-    "cache": cmd_cache,
+    "read": cmd_read,
+    "convert": cmd_convert,
+    "publish": cmd_publish,
     "feed": cmd_feed,
+    "voices": cmd_voices,
 }
-
-
-def normalize(argv: list[str]) -> list[str]:
-    """Rewrite the convenience spellings into a real subcommand line.
-
-    Both of these exist because the two things you do constantly deserve to be
-    short: making an MP3, and putting it on the feed.
-    """
-    argv = list(argv)
-    # "earmark publish SOURCE" is "earmark read SOURCE --publish". Publishing is
-    # the verb you actually want, so it gets to be a verb rather than a flag
-    # hiding at the end of the line.
-    if argv and argv[0] == "publish":
-        argv = ["read", *argv[1:], "--publish"]
-    # "earmark paper.pdf" means "earmark read paper.pdf".
-    if argv and argv[0] not in SUBCOMMANDS and not argv[0].startswith("-"):
-        argv.insert(0, "read")
-    return argv
 
 
 def main(argv: list[str] | None = None) -> int:
-    argv = normalize(sys.argv[1:] if argv is None else argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -757,10 +722,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     from earmark.config import ConfigError
+    from earmark.library import LibraryError
+    from earmark.publish import PublishError
 
     try:
         return HANDLERS[args.command](args)
-    except (FileNotFoundError, RuntimeError, ValueError, ConfigError) as exc:
+    except (FileNotFoundError, RuntimeError, ValueError, ConfigError,
+            LibraryError, PublishError) as exc:
         print(f"earmark: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

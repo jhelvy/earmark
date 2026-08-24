@@ -1,8 +1,8 @@
 """Operations on the feed: add, rebuild, prune, check.
 
 Kept separate from :mod:`earmark.feed` (which only renders XML) and
-:mod:`earmark.publish` (which only moves bytes) so that neither knows about the
-other.
+:mod:`earmark.publish` (which only knows the library is a public folder) so
+that neither knows about the other.
 """
 
 from __future__ import annotations
@@ -13,34 +13,44 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from earmark import art
 from earmark import feed as feed_mod
 from earmark import publish as publish_mod
-from earmark import paths
+from earmark.library import Library
 from earmark.source import slugify
 
+CHANNEL_KEYS = ("title", "description", "author", "link", "language", "category", "image")
 
-def state_path() -> Path:
-    return paths.config_dir() / "episodes.json"
+# Files in the library root that earmark owns. Anything else there is an orphan.
+RESERVED = {feed_mod.FEED_FILE, "episodes.json", "earmark.toml", art.COVER_NAME}
 
 
 @dataclass
-class Library:
+class Feed:
+    """One library's episode list, plus the folder it is served from."""
+
+    library: Library
     state: feed_mod.FeedState
-    publisher: publish_mod.Publisher
-    path: Path
+    site: publish_mod.Site
+    after_publish: str | None = None
+    cover: str | None = None
 
     @classmethod
-    def open(cls, feed_config: dict) -> "Library":
-        state = feed_mod.load(state_path())
-        # Channel-level settings live in config.toml; mirror them into state so
-        # the feed can still be rebuilt if the config moves.
-        for key in ("title", "description", "author", "link", "language", "category", "image"):
-            if feed_config.get(key):
-                setattr(state.config, key, feed_config[key])
+    def open(cls, library: Library, cfg) -> "Feed":
+        state = feed_mod.load(library.state_path)
+        # Channel-level settings live in earmark.toml; mirror them into the
+        # state so the feed can still be rebuilt if the config is lost.
+        for key in CHANNEL_KEYS:
+            if cfg.feed.get(key):
+                setattr(state.config, key, cfg.feed[key])
         return cls(
+            library=library,
             state=state,
-            publisher=publish_mod.from_config(feed_config),
-            path=state_path(),
+            site=publish_mod.Site(root=library.root, base_url=cfg.require_base_url()),
+            after_publish=cfg.get("after_publish"),
+            # A hand-written `image` URL is artwork earmark did not make and must
+            # not replace, so it disables the cover pipeline rather than racing it.
+            cover=None if cfg.feed.get("image") else cfg.feed.get("cover"),
         )
 
     # -- writing -----------------------------------------------------------
@@ -48,7 +58,7 @@ class Library:
     def add(self, mp3: Path, meta, seconds: float, description: str = "") -> feed_mod.Episode:
         mp3 = Path(mp3)
         digest = _content_id(mp3)
-        filename = _episode_filename(meta.title, digest)
+        filename = _episode_filename(meta.title, mp3)
         episode = feed_mod.Episode(
             id=digest,
             title=meta.title,
@@ -66,38 +76,41 @@ class Library:
         # accumulating duplicates.
         self.state.episodes = [e for e in self.state.episodes if e.id != digest]
         self.state.episodes.append(episode)
-        self.publisher.put(mp3, episode.name)
+        self.site.put(mp3, episode.name)
         return episode
 
-    def set_cover(self, image: Path, *, size: int | None = None,
-                  background: str | None = None) -> tuple[str, str]:
-        """Publish cover art and point the feed at it.
+    def refresh_cover(self) -> tuple[str, str] | None:
+        """Normalize the configured cover image and point the feed at it.
 
-        Returns ``(url, detail)``. The URL is written to the *state*, not to
-        config.toml: earmark produced the file, so earmark owns the setting. A
-        hand-written ``image`` in ``[feed]`` still wins, because :meth:`open`
-        copies config over the state on every load.
+        Returns ``(url, detail)``, or ``None`` if no cover is configured.
+
+        A non-compliant ``<itunes:image>`` produces no error anywhere -- the app
+        shows its grey placeholder and the feed still validates -- so earmark
+        normalizes rather than validates, every time the feed is written.
         """
-        import tempfile
+        if not self.cover:
+            return None
+        source = Path(self.cover).expanduser()
+        if not source.is_absolute():
+            source = self.library.root / source
+        if not source.is_file():
+            raise FileNotFoundError(f"cover image not found: {source}")
 
-        from earmark import art
+        import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
             local = Path(tmp) / art.COVER_NAME
-            art.prepare(
-                Path(image), local,
-                size=size or art.DEFAULT_SIZE,
-                background=background or art.DEFAULT_BACKGROUND,
-            )
+            art.prepare(source, local, size=art.DEFAULT_SIZE,
+                        background=art.DEFAULT_BACKGROUND)
             detail = art.describe(local)
             # Podcast apps cache show artwork by URL and re-check it rarely --
-            # Castbox will happily keep a placeholder for days after the image
-            # appears. A content hash in the query string makes a changed cover
-            # a different URL, so it is fetched immediately, while the file on
-            # the host keeps one name and never orphans an old one.
+            # Castbox will keep a placeholder for days after the image appears.
+            # A content hash in the query string makes a changed cover a
+            # different URL, so it is fetched immediately, while the file in the
+            # library keeps one name and never orphans an old one.
             stamp = hashlib.sha256(local.read_bytes()).hexdigest()[:8]
-            self.publisher.put(local, art.COVER_NAME)
-        url = f"{self.publisher.url_for(art.COVER_NAME)}?v={stamp}"
+            self.site.put(local, art.COVER_NAME)
+        url = f"{self.site.url_for(art.COVER_NAME)}?v={stamp}"
         self.state.config.image = url
         return url, detail
 
@@ -114,72 +127,52 @@ class Library:
             survivors.append(episode)
         dropped = [e for e in ordered if e not in survivors]
         for episode in dropped:
-            self.publisher.remove(episode.name)
+            self.site.remove(episode.name)
         self.state.episodes = survivors
         return dropped
 
-    def publish_feed(self) -> str:
-        """Render feed.xml, upload it, and finalize the publisher."""
-        import tempfile
-
-        xml = feed_mod.build(self.state, self.publisher.url_for)
-        with tempfile.TemporaryDirectory() as tmp:
-            local = Path(tmp) / feed_mod.FEED_FILE
-            local.write_bytes(xml)
-            self.publisher.put(local, feed_mod.FEED_FILE)
-            # Publish the manifest too, so the feed is recoverable on a new machine.
-            manifest = Path(tmp) / "episodes.json"
-            manifest.write_text(self.state.to_json(), encoding="utf-8")
-            self.publisher.put(manifest, "episodes.json")
-        finish = getattr(self.publisher, "finish", None)
-        if finish:
-            finish()
+    def write(self) -> str:
+        """Render feed.xml into the library, save state, run the hook."""
+        xml = feed_mod.build(self.state, self.site.url_for)
+        self.library.feed_path.write_bytes(xml)
+        self.save()
+        self.site.finish(self.after_publish)
         return self.url
 
     def save(self) -> None:
-        feed_mod.save(self.state, self.path)
+        feed_mod.save(self.state, self.library.state_path)
 
     # -- reading -----------------------------------------------------------
 
     @property
     def url(self) -> str:
-        return self.publisher.url_for(feed_mod.FEED_FILE)
+        return self.site.url_for(feed_mod.FEED_FILE)
 
     def total_bytes(self) -> int:
         return sum(e.bytes for e in self.state.episodes)
 
-    def orphans(self) -> list[str] | None:
-        """Published files the manifest no longer references.
-
-        ``None`` when the publisher cannot enumerate what it holds.
-        """
-        lister = getattr(self.publisher, "list_names", None)
-        names = lister() if lister else None
-        if names is None:
-            return None
-        from earmark import art
-
-        known = {e.name for e in self.state.episodes}
-        known |= {feed_mod.FEED_FILE, "episodes.json", art.COVER_NAME}
-        return sorted(n for n in names if n not in known)
+    def orphans(self) -> list[str]:
+        """Published files in the library root the manifest no longer lists."""
+        known = {e.name for e in self.state.episodes} | RESERVED
+        return sorted(n for n in self.site.list_names() if n not in known)
 
     def drop_orphans(self) -> list[str]:
-        orphans = self.orphans() or []
+        orphans = self.orphans()
         for name in orphans:
-            self.publisher.remove(name)
+            self.site.remove(name)
         return orphans
 
     def check(self) -> list[tuple[str, bool, str]]:
         """HEAD the feed and the newest episodes to prove the URLs really work."""
         newest = sorted(self.state.episodes, key=lambda e: e.published, reverse=True)
-        urls = [self.publisher.url_for(feed_mod.FEED_FILE)]
+        urls = [self.url]
         # The cover is the one asset that fails silently in a podcast app -- a
         # broken URL shows a grey placeholder, not an error -- so check it. Use
         # the configured URL rather than url_for(COVER_NAME): the image may be
         # hosted somewhere else entirely.
         if self.state.config.image:
             urls.append(self.state.config.image)
-        urls += [self.publisher.url_for(e.name) for e in newest[:3]]
+        urls += [self.site.url_for(e.name) for e in newest[:3]]
         return [(url, *publish_mod.check_url(url)) for url in urls]
 
 
@@ -195,10 +188,17 @@ def _content_id(path: Path) -> str:
     return digest.hexdigest()[:16]
 
 
-def _episode_filename(title: str, digest: str) -> str:
-    slug = slugify(title, max_len=50)
-    stamp = date.today().isoformat()
-    return f"{stamp}-{slug}-{digest[:8]}.mp3"
+def _episode_filename(title: str, mp3: Path) -> str:
+    """The published name of an episode.
+
+    The slug and nothing else. ``convert`` already wrote ``audio/<slug>.mp3``,
+    and if publishing renamed it the two commands would disagree about where a
+    document's audio lives. Re-publishing therefore overwrites in place; the
+    content digest still distinguishes episodes, as the feed's guid.
+    """
+    if mp3.parent.name == "audio":
+        return mp3.name
+    return f"{slugify(title, max_len=50)}.mp3"
 
 
 def parse_size(text: str) -> int:

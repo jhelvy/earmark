@@ -1,6 +1,11 @@
-"""Filesystem locations.
+"""Filesystem locations outside a library.
 
-Models live in the *data* directory, never the cache: ``earmark cache clear``
+Almost nothing lives here. A library holds its own config, state, text and
+audio; what remains is the machine-local stuff that must *not* sync to a public
+folder: the 354 MB model download, the synthesis cache, and a one-line pointer
+at the default library.
+
+Models live in the *data* directory, never the cache: clearing the chunk cache
 must not delete a 354 MB download.
 """
 
@@ -30,13 +35,13 @@ def models_dir() -> Path:
     return data_dir() / "models"
 
 
-def config_dir() -> Path:
-    """Where config.toml and episodes.json live.
+def state_dir() -> Path:
+    """Where the default-library pointer lives.
 
     Not platformdirs on macOS: there ``user_config_dir`` and ``user_data_dir``
-    are the *same* path, so config.toml would sit inside the directory holding
-    a 354 MB models/ folder. ~/.config/earmark is both distinct from the data
-    directory and where someone editing a CLI's config actually looks.
+    are the *same* path, so the pointer would sit inside the directory holding
+    a 354 MB models/ folder. ``EARMARK_CONFIG_DIR`` overrides it, which is also
+    how the test suite keeps out of a real home directory.
     """
     override = os.environ.get("EARMARK_CONFIG_DIR")
     if override:
@@ -46,9 +51,5 @@ def config_dir() -> Path:
     return Path.home() / ".config" / APP
 
 
-def config_path() -> Path:
-    return config_dir() / "config.toml"
-
-
-def episodes_path() -> Path:
-    return config_dir() / "episodes.json"
+def pointer_path() -> Path:
+    return state_dir() / "default"

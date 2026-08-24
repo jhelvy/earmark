@@ -54,3 +54,47 @@ def test_legacy_float32_entries_are_still_cleanable():
     assert cache.info()["count"] == 1
     removed, _ = cache.clear()
     assert removed == 1
+
+
+def test_autoprune_drops_stale_entries(monkeypatch):
+    import time
+
+    import numpy as np
+
+    from earmark import cache
+
+    old = cache.key("stale", "fake/1", "af_heart", 1.0, "en-us")
+    fresh = cache.key("fresh", "fake/1", "af_heart", 1.0, "en-us")
+    cache.put(old, np.zeros(100, dtype=np.float32))
+    cache.put(fresh, np.zeros(100, dtype=np.float32))
+
+    long_ago = time.time() - 200 * 86400
+    import os
+
+    os.utime(cache.path_for(old), (long_ago, long_ago))
+
+    cache.autoprune()
+    assert cache.get(old) is None
+    assert cache.get(fresh) is not None
+
+
+def test_autoprune_evicts_least_recently_used_over_budget():
+    import os
+    import time
+
+    import numpy as np
+
+    from earmark import cache
+
+    keys = []
+    for i in range(5):
+        k = cache.key(f"chunk {i}", "fake/1", "af_heart", 1.0, "en-us")
+        cache.put(k, np.zeros(1000, dtype=np.float32))
+        keys.append(k)
+        stamp = time.time() - (5 - i) * 60
+        os.utime(cache.path_for(k), (stamp, stamp))
+
+    cache.autoprune(max_bytes=4000)
+    assert cache.get(keys[0]) is None, "the oldest touch should go first"
+    assert cache.get(keys[-1]) is not None, "the newest touch should survive"
+    assert cache.info()["bytes"] <= 4000
