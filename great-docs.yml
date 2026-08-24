@@ -38,10 +38,13 @@ logo:
 
 # The hex logo is transparent and 1.1 MB, so it cannot serve as a link preview
 # on its own. assets/social-card.png is that logo flattened onto the hex's own
-# cream at the 1200x630 every platform expects. Regenerate it with:
+# cream, at twice the 1200x630 every platform documents. The doubling is the
+# whole point: LinkedIn lays the card out around 740 CSS px, which is 1480
+# device px on a retina screen, so a 1200px file is upscaled before anyone sees
+# it and looks soft. Regenerate it with:
 #
-#   ffmpeg -y -f lavfi -i color=c=0xf5f1ea:s=1200x630 -i docs/logo.png \
-#     -filter_complex "[1:v]scale=-1:530[fg];[0:v][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p" \
+#   ffmpeg -y -f lavfi -i color=c=0xf5f1ea:s=2400x1260 -i docs/logo.png \
+#     -filter_complex "[1:v]scale=-1:1060:flags=lanczos[fg];[0:v][fg]overlay=(W-w)/2:(H-h)/2" \
 #     -frames:v 1 assets/social-card.png
 #
 # The URL has to be absolute. A relative `image:` is copied to the build root,

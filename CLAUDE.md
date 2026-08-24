@@ -212,9 +212,11 @@ just to build prose. CI therefore never installs earmark at all.
 the build root, which Quarto does not register as a resource, so the file never
 reaches `_site/` and the `og:image` tag 404s. `assets/` *is* a resource
 directory, so the card lives at `assets/social-card.png` and the config names
-its deployed URL. The card itself is the hex logo flattened onto its own cream
-at 1200x630, because the logo is transparent and 1.1 MB; `great-docs.yml`
-carries the ffmpeg line that regenerates it.
+its deployed URL. The card itself is the hex logo flattened onto its own cream,
+because the logo is transparent and 1.1 MB. It is rendered at 2400x1260,
+twice the documented 1200x630: LinkedIn lays the card out near 740 CSS px,
+which is 1480 device px on a retina screen, so a 1200px file is upscaled
+before anyone sees it. `great-docs.yml` carries the ffmpeg line.
 
 `seo.title_template` is `"{page_title}"`, not the default
 `"{page_title} | {site_name}"`. Quarto already appends the site name, so the
