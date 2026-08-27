@@ -22,26 +22,36 @@ Everything runs on your machine. No API keys, no per-minute cost.
 ## Install
 
 You need [uv](https://docs.astral.sh/uv/), `ffmpeg`, and Python 3.11 or
-3.12 (`uv` will fetch it for you). macOS, Linux and Windows are all
-covered in
-[Installation](https://jhelvy.github.io/earmark/user-guide/installation.html).
+3.12 (`uv` will fetch it for you).
+
+Go to the
+[Installation](https://jhelvy.github.io/earmark/user-guide/installation.html)
+page for details.
 
 ## Main commands
 
-``` bash
-earmark text    SOURCE   ->  text/<name>.md      look at it, fix it
-earmark audio   SOURCE   ->  audio/<name>.mp3    narrate it
-earmark publish SOURCE   ->  feed.xml            all of the above
-```
-
-`publish` runs the whole chain, so `earmark publish paper.pdf` is all
-you ever need to type. The other four commands are setup and
-housekeeping: `init`, `config`, `feed`, `voices`.
-
 Everything earmark makes lands in one folder you choose (your
-**library**), which is meant to be a folder served on the public web.
-There is no `library` setting anywhere, because the library is the
-folder its `earmark.toml` sits in.
+[library](https://jhelvy.github.io/earmark/user-guide/the-library.html)),
+which should be a folder served on the public web.
+
+There are 3 main commands:
+
+1.  Get the text: `earmark text SOURCE`
+2.  Narrate the text: `earmark audio SOURCE`
+3.  Publish to your feed: `earmark publish SOURCE`
+
+In each step, the `SOURCE` can be an article URL or a document (PDF,
+DOCX, PPTX, EPUB, HTML, Markdown).
+
+Also, each step will run the prior steps, so step 3
+(`earmark publish SOURCE`) is all you need to run the whole chain from
+`SOURCE` to audio published in your feed.
+
+The intermediate steps are there in case you want to edit the raw text
+before narrating the audio.
+
+The other four commands are setup and housekeeping: `init`, `config`,
+`feed`, `voices`.
 
 ## Start here
 
