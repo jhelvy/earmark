@@ -116,6 +116,17 @@ of `after_publish`, which is a config key rather than a plugin system and covers
 every host without earmark knowing the name of one. **Do not add a publisher
 back.** Add a recipe to the README's table.
 
+### Two ways off the feed, and they are not the same question
+
+`--prune` decides from a count or a size; `--remove` takes the episodes the user
+named. Keep both — prune is the wrong tool for "not that one", which was the
+whole reason `--remove` exists. `earmark feed` numbers its listing and
+`Feed.listing()` is the single definition of that order, so `--remove 3` and
+line 3 cannot drift apart. A number is a **position, not an identity** —
+publishing renumbers everything — which is why `--remove` always prints the
+titles it matched before deleting, and why `--yes` is an opt-out rather than
+the default.
+
 `feed.py` renders XML from `episodes.json` and never parses XML back.
 `feedops.py` combines the two. Keep those three separate.
 

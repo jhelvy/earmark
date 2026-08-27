@@ -176,6 +176,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="keep newest episodes under this total, e.g. 800MB")
     feed.add_argument("--orphans", action="store_true",
                       help="with --prune, also delete library files the feed no longer lists")
+    feed.add_argument("--remove", nargs="*", default=None, metavar="EPISODE",
+                      help="remove episodes by title or list number; bare --remove asks")
+    feed.add_argument("--yes", "-y", action="store_true", help="do not ask before removing")
 
     voices = _sub(sub, "voices", help="list available voices, or hear one")
     voices.add_argument("--engine", choices=["kokoro", "say"], default="kokoro")
@@ -559,11 +562,13 @@ def _adopt_audio(args, lib):
 
 
 def cmd_feed(args) -> int:
-    from earmark.audio import format_duration
     from earmark.feedops import Feed, parse_size
 
     lib, cfg = _open_library(args)
     feed = Feed.open(lib, cfg)
+
+    if args.remove is not None:
+        return _remove_episodes(feed, args)
 
     if args.prune:
         if args.keep is None and args.max_size is None and not args.orphans:
@@ -604,15 +609,80 @@ def cmd_feed(args) -> int:
             )
         return 1 if failures else 0
 
-    episodes = sorted(feed.state.episodes, key=lambda e: e.published, reverse=True)
+    episodes = feed.listing()
     if not episodes:
         print("nothing published yet.  earmark publish paper.pdf")
-    for episode in episodes:
-        print(f"{episode.published}  {format_duration(episode.seconds):>8}  "
-              f"{episode.bytes / 1e6:6.1f} MB  {episode.title}")
+    for line in _episode_lines(episodes):
+        print(line)
     if episodes:
         print(f"\n{len(episodes)} episode(s), {feed.total_bytes() / 1e6:.0f} MB total")
+        print("remove one with:  earmark feed --remove")
     print(f"feed      {feed.url}")
+    return 0
+
+
+def _episode_lines(episodes) -> list[str]:
+    """One numbered line per episode.
+
+    The number is what makes the list usable as a menu: ``--remove 3`` means the
+    third line of it. It is a position, not an identity -- publishing something
+    renumbers the list -- which is why removing by number still prints the
+    titles it matched before it deletes anything.
+    """
+    from earmark.audio import format_duration
+
+    width = len(str(len(episodes)))
+    return [
+        f"{i:>{width}}  {e.published}  {format_duration(e.seconds):>8}  "
+        f"{e.bytes / 1e6:6.1f} MB  {e.title}"
+        for i, e in enumerate(episodes, 1)
+    ]
+
+
+def _remove_episodes(feed, args) -> int:
+    """``earmark feed --remove`` -- take episodes off the feed by name.
+
+    ``--prune`` decides what goes from a count or a size, which is the wrong
+    question when what you want is "not that one". Bare ``--remove`` prints the
+    numbered list and asks, so the list itself is the menu.
+    """
+    episodes = feed.listing()
+    if not episodes:
+        print("nothing published yet, so there is nothing to remove.")
+        return 0
+
+    terms = list(args.remove)
+    if not terms:
+        if not (sys.stdin.isatty() and sys.stdout.isatty()):
+            raise ValueError("--remove needs a title or a number when it cannot ask")
+        for line in _episode_lines(episodes):
+            print(line)
+        answer = input("\nremove which? (numbers, ranges or titles; blank to cancel) ").strip()
+        if not answer:
+            print("nothing removed.")
+            return 0
+        terms = [answer]
+
+    doomed = feed.select(terms)
+    if not doomed:
+        print("nothing removed.")
+        return 0
+
+    print("\nremoving:")
+    for episode in doomed:
+        print(f"  {episode.title}")
+    if not args.yes and sys.stdin.isatty() and sys.stdout.isatty():
+        # The MP3 goes with the episode, so this is not undoable from the
+        # library; only re-running `earmark publish` brings it back.
+        if input(f"delete {len(doomed)} episode(s) and their audio? [y/N] ").strip().lower() \
+                not in ("y", "yes"):
+            print("nothing removed.")
+            return 0
+
+    for episode in feed.remove(doomed):
+        print(f"removed {episode.filename}")
+    feed.refresh_cover()
+    print(f"feed      {feed.write()}")
     return 0
 
 

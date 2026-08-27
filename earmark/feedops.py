@@ -115,7 +115,7 @@ class Feed:
         return url, detail
 
     def prune(self, keep: int | None = None, max_bytes: int | None = None) -> list[feed_mod.Episode]:
-        ordered = sorted(self.state.episodes, key=lambda e: e.published, reverse=True)
+        ordered = self.listing()
         survivors: list[feed_mod.Episode] = []
         running = 0
         for i, episode in enumerate(ordered):
@@ -129,6 +129,20 @@ class Feed:
         for episode in dropped:
             self.site.remove(episode.name)
         self.state.episodes = survivors
+        return dropped
+
+    def remove(self, episodes: list[feed_mod.Episode]) -> list[feed_mod.Episode]:
+        """Drop named episodes from the feed and delete their audio.
+
+        The counterpart to :meth:`prune`: prune decides *for* you from a count
+        or a size, this takes the episodes you picked. Both end the same way --
+        the episode leaves ``episodes.json`` and its MP3 leaves the folder.
+        """
+        doomed = {e.id for e in episodes}
+        dropped = [e for e in self.listing() if e.id in doomed]
+        for episode in dropped:
+            self.site.remove(episode.name)
+        self.state.episodes = [e for e in self.state.episodes if e.id not in doomed]
         return dropped
 
     def write(self) -> str:
@@ -147,6 +161,49 @@ class Feed:
     @property
     def url(self) -> str:
         return self.site.url_for(feed_mod.FEED_FILE)
+
+    def listing(self) -> list[feed_mod.Episode]:
+        """Episodes newest first -- the one order the CLI ever shows.
+
+        ``--remove 3`` refers to the third line of ``earmark feed``, so the
+        listing and the matcher have to agree on what that order is.
+        """
+        return sorted(self.state.episodes, key=lambda e: e.published, reverse=True)
+
+    def match(self, text: str) -> list[feed_mod.Episode]:
+        """Find episodes by list number or by title.
+
+        A bare number is a line of :meth:`listing`. Otherwise an exact title
+        wins outright, so a title that happens to be contained in a longer one
+        can still be named; failing that, any title containing the text.
+        """
+        ordered = self.listing()
+        text = text.strip()
+        if text.isdigit():
+            index = int(text) - 1
+            if not 0 <= index < len(ordered):
+                raise ValueError(f"no episode {text}; the feed has {len(ordered)}")
+            return [ordered[index]]
+        lowered = text.lower()
+        exact = [e for e in ordered if e.title.lower() == lowered]
+        if exact:
+            return exact
+        hits = [e for e in ordered if lowered in e.title.lower()]
+        if not hits:
+            raise ValueError(f"no episode matches {text!r}")
+        return hits
+
+    def select(self, terms: list[str]) -> list[feed_mod.Episode]:
+        """Resolve what the user typed into episodes, in listing order.
+
+        Accepts what a person types when reading a numbered list: numbers,
+        ranges, titles, separated by commas or spaces.
+        """
+        picked: dict[str, feed_mod.Episode] = {}
+        for term in _split_terms(terms):
+            for episode in self.match(term):
+                picked[episode.id] = episode
+        return [e for e in self.listing() if e.id in picked]
 
     def total_bytes(self) -> int:
         return sum(e.bytes for e in self.state.episodes)
@@ -199,6 +256,32 @@ def _episode_filename(title: str, mp3: Path) -> str:
     if mp3.parent.name == "audio":
         return mp3.name
     return f"{slugify(title, max_len=50)}.mp3"
+
+
+RANGE = re.compile(r"(\d+)\s*-\s*(\d+)")
+
+
+def _split_terms(terms: list[str]) -> list[str]:
+    """Split what was typed into one term per episode.
+
+    Commas separate, because a numbered list invites "1, 3, 5", and ``2-4``
+    expands to the lines between. A title is left whole -- it may contain both
+    a comma and a hyphen, so only an all-digits range is expanded.
+    """
+    out: list[str] = []
+    for term in terms:
+        for part in term.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            span = RANGE.fullmatch(part)
+            if span:
+                first, last = int(span.group(1)), int(span.group(2))
+                step = 1 if last >= first else -1
+                out += [str(n) for n in range(first, last + step, step)]
+            else:
+                out.append(part)
+    return out
 
 
 def parse_size(text: str) -> int:

@@ -31,10 +31,49 @@ your application data, not in the library.
 ```bash
 earmark feed --check                  # do the published URLs actually serve?
 earmark feed --rebuild                # rewrite feed.xml and the cover
+earmark feed --remove                 # pick episodes off the list and delete them
 earmark feed --prune --keep 20        # drop all but the newest 20
 earmark feed --prune --max-size 800MB
 earmark feed --prune --orphans        # delete files the feed no longer lists
 ```
+
+There are two ways to take something off the feed, and they answer different
+questions. `--remove` is "not that one". `--prune` is "keep the newest twenty".
+
+### `--remove`
+
+`earmark feed` prints a numbered list, and `--remove` reads from it. With no
+argument it prints that list and asks:
+
+```
+$ earmark feed --remove
+1  2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+2  2026-08-19   0:11:02     5.2 MB  A Mathematical Theory of Communication
+
+remove which? (numbers, ranges or titles; blank to cancel) 2
+
+removing:
+  A Mathematical Theory of Communication
+delete 1 episode(s) and their audio? [y/N] y
+```
+
+The answer takes numbers, ranges and titles together: `1, 3-5, attention`. A
+title matches without its punctuation or its capitals, so enough of it to be
+unambiguous will do.
+
+Naming them up front skips the list but still shows what matched before
+deleting:
+
+```bash
+earmark feed --remove "Attention Is All You Need"
+earmark feed --remove 2 5
+earmark feed --remove attention --yes     # no question asked
+```
+
+The episode's MP3 goes with it. The Markdown in `text/` stays, so republishing
+is `earmark publish text/attention-is-all-you-need.md`.
+
+### `--prune`
 
 `--prune` needs one of `--keep` or `--max-size`; it will not guess.
 

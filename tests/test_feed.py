@@ -133,6 +133,59 @@ def test_prune_respects_a_size_budget(published, tmp_path):
     assert [e.title for e in published.state.episodes] == ["Second"]
 
 
+def test_remove_takes_the_episode_and_its_audio(published, tmp_path):
+    for e in published.state.episodes:
+        published.site.put(_fake_mp3(tmp_path, e.filename), e.name)
+    dropped = published.remove(published.match("First"))
+    assert [d.title for d in dropped] == ["First"]
+    assert [e.title for e in published.state.episodes] == ["Second"]
+    assert not (published.library.root / "audio" / "a.mp3").exists()
+    assert published.orphans() == []
+
+
+def test_a_number_means_a_line_of_the_listing(published):
+    """The listing is newest first, so 1 is the newest episode, not the first
+    one added."""
+    assert [e.title for e in published.listing()] == ["Second", "First"]
+    assert published.match("1")[0].title == "Second"
+    assert published.match("2")[0].title == "First"
+
+
+def test_matching_a_title_ignores_case_and_matches_a_part(published):
+    assert published.match("seco")[0].title == "Second"
+    assert published.match("SECOND")[0].title == "Second"
+
+
+def test_an_exact_title_wins_over_a_longer_one_containing_it(published):
+    published.state.episodes.append(
+        Episode(id="c3", title="First Principles", filename="c.mp3", bytes=9,
+                seconds=9, published="2026-03-01")
+    )
+    assert [e.title for e in published.match("First")] == ["First"]
+    assert [e.title for e in published.match("first p")] == ["First Principles"]
+
+
+def test_text_that_matches_nothing_is_an_error(published):
+    with pytest.raises(ValueError, match="no episode matches"):
+        published.match("nothing here")
+    with pytest.raises(ValueError, match="the feed has 2"):
+        published.match("9")
+
+
+def test_select_takes_numbers_ranges_and_titles_at_once(published):
+    published.state.episodes.append(
+        Episode(id="c3", title="Third", filename="c.mp3", bytes=9,
+                seconds=9, published="2026-03-01")
+    )
+    picked = published.select(["1-2, First"])
+    assert [e.title for e in picked] == ["Third", "Second", "First"]
+
+
+def test_select_returns_each_episode_once_and_newest_first(published):
+    picked = published.select(["2", "First", "seco"])
+    assert [e.title for e in picked] == ["Second", "First"]
+
+
 def test_republishing_the_same_file_replaces_its_episode(published, tmp_path):
     from earmark.extract.meta import Metadata
 

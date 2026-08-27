@@ -303,6 +303,54 @@ def test_a_setting_appended_to_the_config_warns_rather_than_vanishing(lib, capsy
     assert "feed.after_publish" in capsys.readouterr().err
 
 
+@needs_ffmpeg
+def test_remove_takes_an_episode_off_the_feed_by_title(lib, paper, capsys):
+    main(["publish", str(paper), "-q", "--library", str(lib.root)])
+    capsys.readouterr()
+    assert main(["feed", "--remove", "reading", "--yes", "--library", str(lib.root)]) == 0
+    assert "removing:" in capsys.readouterr().out
+    assert main(["feed", "--library", str(lib.root)]) == 0
+    assert "nothing published yet" in capsys.readouterr().out
+    assert not list((lib.root / "audio").glob("*.mp3"))
+
+
+@needs_ffmpeg
+def test_remove_names_text_that_matches_no_episode(lib, paper, capsys):
+    main(["publish", str(paper), "-q", "--library", str(lib.root)])
+    capsys.readouterr()
+    assert main(["feed", "--remove", "quantum", "--yes", "--library", str(lib.root)]) == 1
+    assert "no episode matches" in capsys.readouterr().err
+    assert main(["feed", "--library", str(lib.root)]) == 0
+    assert "On Reading Things" in capsys.readouterr().out
+
+
+def test_bare_remove_will_not_guess_without_a_tty(lib, capsys, monkeypatch):
+    from earmark.feed import Episode, FeedState, save
+
+    save(FeedState(episodes=[
+        Episode(id="a1", title="A", filename="a.mp3", bytes=1, seconds=1,
+                published="2026-01-01"),
+    ]), lib.state_path)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    assert main(["feed", "--remove", "--library", str(lib.root)]) == 1
+    assert "needs a title or a number" in capsys.readouterr().err
+
+
+def test_the_listing_numbers_the_episodes(lib, capsys):
+    from earmark.feed import Episode, FeedState, save
+
+    save(FeedState(episodes=[
+        Episode(id="a1", title="Older", filename="a.mp3", bytes=1, seconds=1,
+                published="2026-01-01"),
+        Episode(id="b2", title="Newer", filename="b.mp3", bytes=1, seconds=1,
+                published="2026-02-01"),
+    ]), lib.state_path)
+    main(["feed", "--library", str(lib.root)])
+    lines = [l for l in capsys.readouterr().out.splitlines() if "MB" in l]
+    assert lines[0].startswith("1") and "Newer" in lines[0]
+    assert lines[1].startswith("2") and "Older" in lines[1]
+
+
 def test_prune_needs_to_be_told_what_to_keep(lib, capsys):
     assert main(["feed", "--prune", "--library", str(lib.root)]) == 1
     assert "--keep" in capsys.readouterr().err

@@ -4,23 +4,30 @@ description: Show, rebuild or trim your feed.
 ---
 
 ```
-earmark feed [--rebuild] [--check] [--prune] [--keep N] [--max-size SIZE] [--orphans]
+earmark feed [--remove [EPISODE ...]] [--yes] [--rebuild] [--check]
+             [--prune] [--keep N] [--max-size SIZE] [--orphans]
 ```
 
-With no flags, lists what is published: one line per episode, the total size,
-and the feed URL to paste into a podcast app.
+With no flags, lists what is published: one numbered line per episode, the
+total size, and the feed URL to paste into a podcast app.
 
 ```
-2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+1  2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+2  2026-08-19   0:11:02     5.2 MB  A Mathematical Theory of Communication
 
-1 episode(s), 10 MB total
+2 episode(s), 16 MB total
+remove one with:  earmark feed --remove
 feed      https://filedn.com/XXXX/audio/feed.xml
 ```
+
+The number is a line of that list, and it is what `--remove` accepts.
 
 ## Options
 
 | Flag | Default | Means |
 |---|---|---|
+| `--remove [EPISODE ...]` | off | remove episodes by title or list number; bare `--remove` asks |
+| `--yes`, `-y` | off | do not ask before removing |
 | `--rebuild` | off | rewrite `feed.xml` and the cover from the current settings |
 | `--check` | off | prove the published URLs actually serve |
 | `--prune` | off | remove episodes; needs `--keep` or `--max-size` |
@@ -28,6 +35,48 @@ feed      https://filedn.com/XXXX/audio/feed.xml
 | `--max-size SIZE` | none | keep newest episodes under this total, e.g. `800MB` |
 | `--orphans` | off | with `--prune`, also delete library files the feed no longer lists |
 | `--library PATH` | | the library to act on |
+
+## `--remove`
+
+Takes named episodes off the feed and deletes their MP3s. This is the flag for
+"not that one"; `--prune` is for "keep the newest twenty".
+
+With no argument it prints the numbered list and asks which to remove:
+
+```
+$ earmark feed --remove
+1  2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
+2  2026-08-19   0:11:02     5.2 MB  A Mathematical Theory of Communication
+
+remove which? (numbers, ranges or titles; blank to cancel) 2
+
+removing:
+  A Mathematical Theory of Communication
+delete 1 episode(s) and their audio? [y/N] y
+removed a-mathematical-theory-of-communication.mp3
+feed      https://filedn.com/XXXX/audio/feed.xml
+```
+
+An answer may mix numbers, ranges and titles: `1, 3-5, attention`.
+
+Given arguments it removes without printing the list, but still shows the
+titles it matched and asks to confirm:
+
+```bash
+earmark feed --remove "Attention Is All You Need"
+earmark feed --remove 2 5
+earmark feed --remove attention shannon --yes
+```
+
+An argument matches an episode by list number, then by exact title, then by any
+title containing it, case-insensitively -- so `--remove attention` is enough
+when only one episode has that word in its title. Text that matches nothing is
+an error and nothing is removed. `--yes` skips the confirmation, which is what
+a script wants; with no TTY to ask, bare `--remove` is an error rather than a
+guess.
+
+Removing an episode leaves `text/` alone, so the Markdown is still there to
+re-publish from.
 
 ## `--rebuild`
 
@@ -62,6 +111,8 @@ never treated as an orphan.
 
 ```bash
 earmark feed
+earmark feed --remove
+earmark feed --remove "Attention Is All You Need"
 earmark feed --check
 earmark feed --rebuild
 earmark feed --prune --keep 20
