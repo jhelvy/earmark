@@ -1,0 +1,16 @@
+---
+title: earmark
+format: gfm
+---
+
+<!-- README.md is generated from README.qmd by `quarto render README.qmd`.
+     The body below is assets/_common.qmd, shared with the docs landing page:
+     edit that file, not README.md. -->
+
+<img src="docs/logo.png" align="right" width="160" alt="earmark logo" />
+
+Turn articles into narrated audio, then publish to a public podcast feed
+
+**[Documentation →](https://jhelvy.github.io/earmark/)**
+
+{{< include assets/_common.qmd >}}

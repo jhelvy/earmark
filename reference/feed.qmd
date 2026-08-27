@@ -17,7 +17,7 @@ total size, and the feed URL to paste into a podcast app.
 
 2 episode(s), 16 MB total
 remove one with:  earmark feed --remove
-feed      https://filedn.com/XXXX/audio/feed.xml
+feed      https://filedn.com/XXXX/earmark/feed.xml
 ```
 
 The number is a line of that list, and it is what `--remove` accepts.
@@ -26,7 +26,7 @@ The number is a line of that list, and it is what `--remove` accepts.
 
 | Flag | Default | Means |
 |---|---|---|
-| `--remove [EPISODE ...]` | off | remove episodes by title or list number; bare `--remove` asks |
+| `--remove [EPISODE ...]` | off | delete episodes by title or list number, audio and text with them; bare `--remove` asks |
 | `--yes`, `-y` | off | do not ask before removing |
 | `--rebuild` | off | rewrite `feed.xml` and the cover from the current settings |
 | `--check` | off | prove the published URLs actually serve |
@@ -38,8 +38,9 @@ The number is a line of that list, and it is what `--remove` accepts.
 
 ## `--remove`
 
-Takes named episodes off the feed and deletes their MP3s. This is the flag for
-"not that one"; `--prune` is for "keep the newest twenty".
+Deletes named episodes outright: the feed entry, `audio/<slug>.mp3` and
+`text/<slug>.md`. This is the flag for "not that one"; `--prune` is for "keep
+the newest twenty", and prune keeps the Markdown.
 
 With no argument it prints the numbered list and asks which to remove:
 
@@ -52,10 +53,15 @@ remove which? (numbers, ranges or titles; blank to cancel) 2
 
 removing:
   A Mathematical Theory of Communication
-delete 1 episode(s) and their audio? [y/N] y
-removed a-mathematical-theory-of-communication.mp3
-feed      https://filedn.com/XXXX/audio/feed.xml
+    audio/a-mathematical-theory-of-communication.mp3
+    text/a-mathematical-theory-of-communication.md
+delete 1 episode(s) and those files? [y/N] y
+removed 1 episode(s)
+feed      https://filedn.com/XXXX/earmark/feed.xml
 ```
+
+Every file that goes is named before the question, because the Markdown is the
+half you may have hand-edited.
 
 An answer may mix numbers, ranges and titles: `1, 3-5, attention`.
 
@@ -75,8 +81,8 @@ an error and nothing is removed. `--yes` skips the confirmation, which is what
 a script wants; with no TTY to ask, bare `--remove` is an error rather than a
 guess.
 
-Removing an episode leaves `text/` alone, so the Markdown is still there to
-re-publish from.
+Nothing is recoverable from the library afterwards; re-publishing means running
+`earmark publish` on the original source again.
 
 ## `--rebuild`
 
@@ -102,8 +108,8 @@ newest episodes that fit under it.
 ## `--orphans` deletes files
 
 `--prune` alone removes episodes from the feed. Adding `--orphans` also deletes
-library files the feed no longer lists: the leftover MP3s and Markdown from
-episodes already dropped. It only runs alongside `--prune`, and `cover.jpg` is
+library files the feed no longer lists: the leftover MP3s from episodes already
+dropped. It only runs alongside `--prune`, and `cover.jpg` is
 never treated as an orphan.
 :::
 

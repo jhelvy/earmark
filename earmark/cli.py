@@ -35,8 +35,8 @@ The other two exist for when you want to stop partway -- to fix a mangled
 equation in the Markdown, or to narrate something without publishing it.
 
 setting up:
-  earmark init ~/pCloud\\ Drive/public/audio \\
-      --base-url https://filedn.com/XXXX/audio
+  earmark init ~/pCloud\\ Drive/public/earmark \\
+      --base-url https://filedn.com/XXXX/earmark
   earmark config                        edit this library's settings
   earmark feed                          what is published, and the feed URL
 """
@@ -668,19 +668,25 @@ def _remove_episodes(feed, args) -> int:
         print("nothing removed.")
         return 0
 
+    # Name every file that goes, not just the episode. Removing a document
+    # takes its Markdown too, and that is the half the user may have hand-edited.
     print("\nremoving:")
+    root = feed.library.root
     for episode in doomed:
         print(f"  {episode.title}")
+        for path in [feed.site.path_for(episode.name), *feed.leftovers(episode)]:
+            if path.is_file():
+                print(f"    {path.relative_to(root)}")
     if not args.yes and sys.stdin.isatty() and sys.stdout.isatty():
-        # The MP3 goes with the episode, so this is not undoable from the
-        # library; only re-running `earmark publish` brings it back.
-        if input(f"delete {len(doomed)} episode(s) and their audio? [y/N] ").strip().lower() \
+        # Nothing here is undoable from the library; only re-running
+        # `earmark publish` on the original source brings a document back.
+        if input(f"delete {len(doomed)} episode(s) and those files? [y/N] ").strip().lower() \
                 not in ("y", "yes"):
             print("nothing removed.")
             return 0
 
-    for episode in feed.remove(doomed):
-        print(f"removed {episode.filename}")
+    removed = feed.remove(doomed)
+    print(f"removed {len(removed)} episode(s)")
     feed.refresh_cover()
     print(f"feed      {feed.write()}")
     return 0

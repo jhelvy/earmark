@@ -14,7 +14,7 @@ $ earmark feed
 2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
 
 1 episode(s), 10 MB total
-feed      https://filedn.com/XXXX/audio/feed.xml
+feed      https://filedn.com/XXXX/earmark/feed.xml
 ```
 
 ## 2. Get that string onto your phone

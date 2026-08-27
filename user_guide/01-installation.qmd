@@ -3,11 +3,51 @@ title: Installation
 description: uv, ffmpeg, and the one Python version constraint that matters.
 ---
 
-earmark needs three things: [uv](https://docs.astral.sh/uv/), `ffmpeg`, and a
-Python 3.11 or 3.12 interpreter that uv will fetch for you.
+earmark needs three things: 
+
+- [uv](https://docs.astral.sh/uv/) 
+- `ffmpeg`
+- A Python 3.11 or 3.12 interpreter that `uv` will fetch for you
+
+Only the `ffmpeg` line differs by platform:
+
+::: {.panel-tabset}
+
+## macOS
 
 ```bash
 brew install ffmpeg
+```
+
+## Linux
+
+Debian or Ubuntu:
+
+```bash
+sudo apt install ffmpeg
+```
+
+Fedora:
+
+```bash
+sudo dnf install ffmpeg
+```
+
+## Windows
+
+```powershell
+winget install Gyan.FFmpeg
+```
+
+`choco install ffmpeg` and `scoop install ffmpeg` work too. Any of them puts
+`ffmpeg.exe` on your `PATH`, which is all earmark looks for. Open a new
+terminal afterwards so the new `PATH` is picked up.
+
+:::
+
+The rest is the same everywhere:
+
+```bash
 git clone https://github.com/jhelvy/earmark.git
 cd earmark
 uv tool install --python 3.12 -e .
@@ -33,9 +73,31 @@ uv downloads a suitable interpreter rather than using the system one.
 
 ## Why ffmpeg
 
-ffmpeg encodes the MP3 and normalizes cover art. It is a runtime prerequisite,
-not a Python dependency, so it has to be installed separately. On Linux,
-`apt install ffmpeg` or the equivalent.
+ffmpeg encodes the MP3 and normalizes cover art. It is a runtime prerequisite
+rather than a Python dependency, so it has to be installed separately with your
+system's package manager, using one of the commands above. earmark finds it by
+looking for `ffmpeg` on your `PATH` and stops with an error before doing any
+work if it is not there.
+
+## Which platforms this runs on
+
+macOS, Linux and Windows. Nothing in earmark is platform-specific: the
+dependencies are pure Python plus `onnxruntime`, which ships wheels for all
+three, and paths come from `platformdirs`, so the model, the cache and the
+default-library pointer land in the right place on each.
+
+Two caveats worth stating plainly:
+
+- **Windows is untested.** It is expected to work and there is no known reason
+  it would not, but nobody has run the suite there yet. If you try it, an issue
+  saying so either way is welcome.
+- **The `say` engine is macOS-only.** It shells out to the built-in macOS
+  `say` command and refuses to start anywhere else. It exists so earmark can
+  narrate something before the 354 MB download finishes; Kokoro, the default
+  engine and the reason to use earmark at all, runs everywhere.
+
+One Windows-specific nuisance: a path with a space in it (`C:\Users\me\My
+Drive\earmark`) has to be quoted, exactly as `~/pCloud Drive` does on macOS.
 
 ## The model downloads itself
 

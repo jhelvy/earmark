@@ -15,7 +15,7 @@ which services can hold a library.
 
 | Works | `base_url` looks like |
 |---|---|
-| pCloud public folder | `https://filedn.com/XXXX/audio` |
+| pCloud public folder | `https://filedn.com/XXXX/earmark` |
 | Cloudflare R2, public bucket | `https://pub-xxxx.r2.dev` |
 | Backblaze B2, public bucket | `https://f000.backblazeb2.com/file/my-bucket` |
 | AWS S3, DigitalOcean Spaces, Wasabi, any S3-compatible bucket | `https://my-bucket.s3.amazonaws.com/audio` |

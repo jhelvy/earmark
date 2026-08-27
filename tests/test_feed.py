@@ -133,14 +133,34 @@ def test_prune_respects_a_size_budget(published, tmp_path):
     assert [e.title for e in published.state.episodes] == ["Second"]
 
 
-def test_remove_takes_the_episode_and_its_audio(published, tmp_path):
+def test_remove_takes_the_episode_its_audio_and_its_text(published, tmp_path):
     for e in published.state.episodes:
         published.site.put(_fake_mp3(tmp_path, e.filename), e.name)
+        published.library.markdown_path(Path(e.filename).stem).write_text("x", encoding="utf-8")
     dropped = published.remove(published.match("First"))
     assert [d.title for d in dropped] == ["First"]
     assert [e.title for e in published.state.episodes] == ["Second"]
     assert not (published.library.root / "audio" / "a.mp3").exists()
+    assert not published.library.markdown_path("a").exists()
+    # The episode that stayed keeps both halves.
+    assert published.library.markdown_path("b").exists()
     assert published.orphans() == []
+
+
+def test_remove_survives_an_episode_with_no_markdown(published, tmp_path):
+    """An MP3 published from outside the library never had any."""
+    published.site.put(_fake_mp3(tmp_path, "a.mp3"), "audio/a.mp3")
+    assert [d.title for d in published.remove(published.match("First"))] == ["First"]
+
+
+def test_prune_leaves_the_markdown_alone(published, tmp_path):
+    """Prune is a size cap, and the text is the cheap half -- keeping it is what
+    makes re-synthesizing a dropped episode free."""
+    for e in published.state.episodes:
+        published.site.put(_fake_mp3(tmp_path, e.filename), e.name)
+        published.library.markdown_path(Path(e.filename).stem).write_text("x", encoding="utf-8")
+    published.prune(keep=1)
+    assert published.library.markdown_path("a").exists()
 
 
 def test_a_number_means_a_line_of_the_listing(published):

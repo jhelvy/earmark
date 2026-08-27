@@ -6,7 +6,7 @@ description: Why a library is a folder, and how earmark finds the one you mean.
 Everything earmark makes lives in one folder you choose, your **library**.
 
 ```
-~/pCloud Drive/public/audio/     <- the library
+~/pCloud Drive/public/earmark/   <- the library
   earmark.toml                   its settings
   feed.xml   episodes.json       the feed
   cover.jpg

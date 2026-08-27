@@ -132,18 +132,36 @@ class Feed:
         return dropped
 
     def remove(self, episodes: list[feed_mod.Episode]) -> list[feed_mod.Episode]:
-        """Drop named episodes from the feed and delete their audio.
+        """Delete named episodes: the entry, the MP3 and the Markdown.
 
         The counterpart to :meth:`prune`: prune decides *for* you from a count
-        or a size, this takes the episodes you picked. Both end the same way --
-        the episode leaves ``episodes.json`` and its MP3 leaves the folder.
+        or a size, this takes the episodes you picked.
+
+        Unlike prune it also takes ``text/<slug>.md``, because the two are
+        answers to different questions. Prune is a size cap and the Markdown is
+        the cheap half of the library -- keeping it is what makes re-synthesis
+        free. ``remove`` is "I do not want this document", and leaving its text
+        behind means the next ``--prune --orphans``, or the user, has to delete
+        the same thing twice.
         """
         doomed = {e.id for e in episodes}
         dropped = [e for e in self.listing() if e.id in doomed]
         for episode in dropped:
             self.site.remove(episode.name)
+            for path in self.leftovers(episode):
+                path.unlink(missing_ok=True)
         self.state.episodes = [e for e in self.state.episodes if e.id not in doomed]
         return dropped
+
+    def leftovers(self, episode: feed_mod.Episode) -> list[Path]:
+        """Files in the library that belong to an episode besides its MP3.
+
+        Everything downstream of a document is named from the same slug, so the
+        published filename is enough to find them -- there is no record of the
+        source that produced an episode.
+        """
+        slug = Path(episode.filename).stem
+        return [p for p in (self.library.markdown_path(slug),) if p.is_file()]
 
     def write(self) -> str:
         """Render feed.xml into the library, save state, run the hook."""

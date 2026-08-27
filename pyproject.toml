@@ -1,7 +1,7 @@
 [project]
 name = "earmark"
 version = "0.1.0"
-description = "Turn any document or article into an MP3 you can listen to."
+description = "Turn articles into narrated audio, then publish to a public podcast feed"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }

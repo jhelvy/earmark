@@ -308,10 +308,14 @@ def test_remove_takes_an_episode_off_the_feed_by_title(lib, paper, capsys):
     main(["publish", str(paper), "-q", "--library", str(lib.root)])
     capsys.readouterr()
     assert main(["feed", "--remove", "reading", "--yes", "--library", str(lib.root)]) == 0
-    assert "removing:" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "removing:" in out
+    # every file that goes is named, the Markdown included
+    assert "text/on-reading-things.md" in out
     assert main(["feed", "--library", str(lib.root)]) == 0
     assert "nothing published yet" in capsys.readouterr().out
     assert not list((lib.root / "audio").glob("*.mp3"))
+    assert not list(lib.text_dir.glob("*.md"))
 
 
 @needs_ffmpeg

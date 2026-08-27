@@ -61,7 +61,7 @@ anywhere](../user-guide/publishing.qmd).
 
 ```toml
 [feed]
-base_url = "https://filedn.com/XXXX/audio"
+base_url = "https://filedn.com/XXXX/earmark"
 title = "John's Reading Pile"
 author = "John Helveston"
 description = "Things I meant to read."

@@ -1,0 +1,67 @@
+`earmark` is a python CLI tool that extracts the text from an article URL or a
+document (PDF, DOCX, PPTX, EPUB, HTML, Markdown), rewrites it into something
+that sounds good read aloud, narrates it locally with
+[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), and puts the MP3 on a
+public podcast feed you can subscribe to on your phone.
+
+Everything runs on your machine. No API keys, no per-minute cost.
+
+## Install
+
+You need [uv](https://docs.astral.sh/uv/), `ffmpeg`, and Python 3.11 or 3.12
+(`uv` will fetch it for you). 
+
+Go to the [Installation](https://jhelvy.github.io/earmark/user-guide/installation.html) page for details.
+
+## Main commands
+
+Everything earmark makes lands in one folder you choose (your [library](https://jhelvy.github.io/earmark/user-guide/the-library.html)),
+which should be a folder served on the public web. 
+
+There are 3 main commands: 
+
+1. Get the text: `earmark text SOURCE`
+2. Narrate the text: `earmark audio SOURCE`
+3. Publish to your feed: `earmark publish SOURCE`
+
+In each step, the `SOURCE` can be an article URL or a document (PDF, DOCX, PPTX, EPUB, HTML, Markdown). 
+
+Also, each step will run the prior steps, so step 3 (`earmark publish SOURCE`) is all you need to run the whole chain from `SOURCE` to audio published in your feed.
+
+The intermediate steps are there in case you want to edit the raw text before narrating the audio.
+
+The other four commands are setup and housekeeping: `init`,
+`config`, `feed`, `voices`.
+
+## Start here
+
+| | |
+|---|---|
+| [Installation](https://jhelvy.github.io/earmark/user-guide/installation.html) | uv, ffmpeg, and the Python version that matters |
+| [Quickstart](https://jhelvy.github.io/earmark/user-guide/quickstart.html) | empty folder to something playing on your phone |
+| [The library](https://jhelvy.github.io/earmark/user-guide/the-library.html) | why a library is a folder |
+| [The pipeline](https://jhelvy.github.io/earmark/user-guide/the-pipeline.html) | `text`, `audio`, `publish`, and editing in between |
+| [Text cleaning](https://jhelvy.github.io/earmark/user-guide/text-cleaning.html) | what gets rewritten before anything is spoken |
+| [Choosing a voice](https://jhelvy.github.io/earmark/user-guide/voices.html) | 54 voices and how to pick one |
+| [Publishing anywhere](https://jhelvy.github.io/earmark/user-guide/publishing.html) | GitHub Pages, rclone, rsync: one line each |
+| [Subscribing on your phone](https://jhelvy.github.io/earmark/user-guide/subscribing.html) | where the feed URL goes in each app |
+| [Reference](https://jhelvy.github.io/earmark/reference/) | every command, flag and config key |
+
+## Development
+
+```bash
+uv venv --python 3.12
+uv pip install -e ".[dev]"
+.venv/bin/python -m pytest -q
+```
+
+The docs site is built with [great-docs](https://github.com/posit-dev/great-docs):
+
+```bash
+uv tool install great-docs
+great-docs preview
+```
+
+## License
+
+MIT © John Paul Helveston

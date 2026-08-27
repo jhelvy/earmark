@@ -41,8 +41,8 @@ rather than silently doing nothing.
 ## Examples
 
 ```bash
-earmark init ~/pCloud\ Drive/public/audio \
-  --base-url https://filedn.com/XXXX/audio \
+earmark init ~/pCloud\ Drive/public/earmark \
+  --base-url https://filedn.com/XXXX/earmark \
   --title "John's Reading Pile"
 
 earmark init ~/public/fiction --base-url https://example.com/fiction --no-default

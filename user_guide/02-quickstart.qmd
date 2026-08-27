@@ -20,8 +20,8 @@ folder, and earmark needs to build episode URLs by appending to a folder. See
 works and what to do if your folder is on one of the others.
 
 ```bash
-earmark init ~/pCloud\ Drive/public/audio \
-  --base-url https://filedn.com/XXXX/audio
+earmark init ~/pCloud\ Drive/public/earmark \
+  --base-url https://filedn.com/XXXX/earmark
 ```
 
 `--base-url` is the public URL that folder is served at. earmark cannot guess
@@ -34,7 +34,7 @@ once and forget about it:
 
 ```bash
 ln -s ~/pCloud\ Drive ~/pcloud
-earmark init ~/pcloud/public/audio --base-url https://filedn.com/XXXX/audio
+earmark init ~/pcloud/public/earmark --base-url https://filedn.com/XXXX/earmark
 ```
 
 `init` also records this library as your default, so the commands work from
@@ -66,7 +66,7 @@ earmark feed
 2026-08-23   0:22:14    10.4 MB  Attention Is All You Need
 
 1 episode(s), 10 MB total
-feed      https://filedn.com/XXXX/audio/feed.xml
+feed      https://filedn.com/XXXX/earmark/feed.xml
 ```
 
 That last URL is what you paste into a podcast app. Because a private feed is
@@ -77,7 +77,7 @@ where the URL goes in each app.
 ## What you just made
 
 ```
-~/pCloud Drive/public/audio/     <- the library
+~/pCloud Drive/public/earmark/   <- the library
   earmark.toml                   its settings
   feed.xml   episodes.json       the feed
   cover.jpg

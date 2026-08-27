@@ -26,7 +26,11 @@ DEFAULT_SAMPLE_RATE = 44_100
 def require_ffmpeg() -> str:
     exe = shutil.which("ffmpeg")
     if not exe:
-        raise RuntimeError("ffmpeg is required but was not found; install it with: brew install ffmpeg")
+        raise RuntimeError(
+            "ffmpeg is required but was not found on PATH; install it with "
+            "'brew install ffmpeg' (macOS), 'apt install ffmpeg' (Linux) or "
+            "'winget install Gyan.FFmpeg' (Windows)"
+        )
     return exe
 
 

@@ -120,7 +120,14 @@ back.** Add a recipe to the README's table.
 
 `--prune` decides from a count or a size; `--remove` takes the episodes the user
 named. Keep both — prune is the wrong tool for "not that one", which was the
-whole reason `--remove` exists. `earmark feed` numbers its listing and
+whole reason `--remove` exists. They also differ in **what they delete**:
+`--remove` takes `text/<slug>.md` along with the MP3, `--prune` does not. Prune
+is a size cap and the Markdown is the cheap half, so keeping it makes
+re-synthesis free; `--remove` means "I do not want this document", and leaving
+its text behind makes the user delete the same thing twice. `Feed.leftovers()`
+is where that list of extra files lives — everything downstream of a document
+is named from the same slug, which is the only link back, since an episode has
+no record of the source that produced it. `earmark feed` numbers its listing and
 `Feed.listing()` is the single definition of that order, so `--remove 3` and
 line 3 cannot drift apart. A number is a **position, not an identity** —
 publishing renumbers everything — which is why `--remove` always prints the
@@ -189,16 +196,53 @@ Python package that *generates* a Quarto project into the gitignored
 committing one would be pointless — it is synthesized each time.
 
 ```bash
-great-docs preview        # local server, live reload
+great-docs preview        # static server over great-docs/_site/, built once
 great-docs build          # -> great-docs/_site/
 great-docs check-links
 ```
 
-- `index.qmd` (repo root) is the landing page. great-docs prefers it over
-  `README.md`, which is what keeps the README's right-aligned logo and tagline
-  out of the docs body — the hero already supplies both. Content that belongs
-  in both places has to be written in both places; keep the landing page the
-  shorter one.
+`preview` is **not** live reload — it is an HTTP server over the last build. A
+source edit is invisible until `great-docs build` runs again, and a change to
+`great-docs.yml` doubly so: the hero, the navbar and the SEO tags are baked into
+the generated `great-docs/index.qmd` at synthesis time, so nothing short of a
+rebuild moves them.
+
+- `assets/_common.qmd` is the **single source of the shared body**, included by
+  both `index.qmd` (the landing page) and `README.qmd`. `index.qmd` is a
+  wrapper carrying only `title: earmark` and the include; `README.md` is
+  generated — never edit it:
+
+  ```bash
+  quarto render README.qmd     # -> README.md
+  ```
+
+  `README.qmd` adds the right-aligned logo, the tagline and a link to the site
+  before the include; the site's hero already supplies those, which is why they
+  are not in the partial. Both wrappers carry `title: earmark` and no `#
+  earmark` heading of their own — an included file's metadata merges into the
+  parent, so a manual heading plus the inherited title renders `# earmark`
+  twice.
+
+  **The partial has to live in `assets/`.** great-docs copies `index.qmd` into
+  the generated `great-docs/` project but copies no file an include names, so a
+  root-level `_common.qmd` fails the build with `could not find file
+  great-docs/_common.qmd`. `assets/` is the one directory that survives:
+  `_copy_assets()` copytrees it whole, so `{{< include assets/_common.qmd >}}`
+  resolves in both trees, and Quarto ignores the leading underscore rather than
+  rendering it as a page. That is a side effect of an images feature rather
+  than a promise (the raw `.qmd` also lands in `_site/assets/`) —
+  `~/gh/great-docs-includes-example` holds the MRE and the feature request
+  asking great-docs for a declared `includes:` list.
+
+  The shared body links to the *deployed* site
+  (`https://jhelvy.github.io/earmark/user-guide/quickstart.html`) instead of
+  `user-guide/quickstart.qmd`: the same table has to work from GitHub's README
+  view, where a relative `.qmd` path is a 404. The cost is that local preview
+  navigation off the landing page goes to the live site.
+
+  Install instructions are **not** duplicated there. The partial names the three
+  prerequisites and links to `user_guide/01-installation.qmd`, which is the only
+  place the per-OS commands live.
 - `great-docs.yml` (repo root) is the only committed config. `great-docs config`
   prints the full annotated template of everything it accepts.
 - `user_guide/NN-name.qmd` is the narrative, **read in order**; the `NN-`

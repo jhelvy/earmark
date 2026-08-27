@@ -38,7 +38,9 @@ earmark feed --prune --orphans        # delete files the feed no longer lists
 ```
 
 There are two ways to take something off the feed, and they answer different
-questions. `--remove` is "not that one". `--prune` is "keep the newest twenty".
+questions. `--remove` is "not that one" -- it deletes the document, audio and
+Markdown together. `--prune` is "keep the newest twenty", and it keeps the
+Markdown so a dropped episode is cheap to bring back.
 
 ### `--remove`
 
@@ -54,8 +56,13 @@ remove which? (numbers, ranges or titles; blank to cancel) 2
 
 removing:
   A Mathematical Theory of Communication
-delete 1 episode(s) and their audio? [y/N] y
+    audio/a-mathematical-theory-of-communication.mp3
+    text/a-mathematical-theory-of-communication.md
+delete 1 episode(s) and those files? [y/N] y
 ```
+
+It names every file before it asks, because the Markdown is the half you may
+have edited by hand.
 
 The answer takes numbers, ranges and titles together: `1, 3-5, attention`. A
 title matches without its punctuation or its capitals, so enough of it to be
@@ -70,8 +77,9 @@ earmark feed --remove 2 5
 earmark feed --remove attention --yes     # no question asked
 ```
 
-The episode's MP3 goes with it. The Markdown in `text/` stays, so republishing
-is `earmark publish text/attention-is-all-you-need.md`.
+Nothing survives in the library, so bringing a document back means running
+`earmark publish` on the original PDF or URL again. Keep it if you only want it
+off the feed for now -- `--prune` does that.
 
 ### `--prune`
 
@@ -80,8 +88,8 @@ is `earmark publish text/attention-is-all-you-need.md`.
 ### `--orphans`
 
 Pruning an episode removes it from the feed. `--orphans` goes further and
-deletes library files the feed no longer lists: the leftover MP3s and Markdown
-from episodes that have already been dropped.
+deletes library files the feed no longer lists: the leftover MP3s from episodes
+that have already been dropped.
 
 It is the one destructive flag here, so it only runs alongside `--prune`.
 `cover.jpg` is never treated as an orphan.

@@ -62,7 +62,7 @@ seo:
   title_template: "{page_title}"
 
 hero:
-  tagline: "Turn the things you meant to read into a private podcast feed."
+  tagline: "Turn articles into narrated audio, then publish to a public podcast feed"
 
 sections:
   - title: Reference
